@@ -9,7 +9,7 @@ env:
 install:
   - ls /usr/local/sphinx-*/
   - pip install Django==$DJANGO
-  - pip install -r requires.txt
+  - pip install -r test-requires.txt
 
 # command to run tests
 script:

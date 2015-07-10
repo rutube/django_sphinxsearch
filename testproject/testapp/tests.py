@@ -1,7 +1,7 @@
 # coding: utf-8
 
 # $Id: $
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.conf import settings
 from django.db import connections
 from django.test import TestCase
@@ -50,13 +50,14 @@ class SphinxModelTestCase(TestCase):
     def reload_object(self, obj):
         return obj._meta.model.objects.get(pk=obj.pk)
 
-    def assertObjectEqualsToDefaults(self, other):
-        result = {k: getattr(other, k) for k in self.defaults.keys()
+    def assertObjectEqualsToDefaults(self, other, defaults=None):
+        defaults = defaults or self.defaults
+        result = {k: getattr(other, k) for k in defaults.keys()
                   if k != 'sphinx_field'}
-        for k in self.defaults.keys():
+        for k in defaults.keys():
             if k == 'sphinx_field':
                 continue
-            self.assertEqual(result[k], self.defaults[k])
+            self.assertEqual(result[k], defaults[k])
 
     def testInsertAttributes(self):
         other = self.reload_object(self.obj)
@@ -106,6 +107,35 @@ class SphinxModelTestCase(TestCase):
         for k, v in numeric_lookups.items():
             other = self.model.objects.get(**{k: v})
             self.assertObjectEqualsToDefaults(other)
+
+    def testUpdates(self):
+        new_values = {
+            'sphinx_field': "another_field",
+            'attr_uint': 200,
+            'attr_bool': False,
+            'attr_bigint': 2**35,
+            'attr_float': 5.4321,
+            'attr_multi': [6,7,8],
+            'attr_multi_64': [2**34, 2**35],
+            'attr_timestamp': self.now + timedelta(seconds=60),
+            # string-based attributes cannot be updated.
+            # 'attr_string': "another string",
+            # "attr_json": {"json": "other", 'add': 3},
+        }
+
+        for k, v in new_values.items():
+            setattr(self.obj, k, v)
+
+        self.obj.save()
+
+        other = self.reload_object(self.obj)
+
+        self.assertObjectEqualsToDefaults(other, defaults=new_values)
+
+    def testDelete(self):
+        self.assertEqual(self.model.objects.count(), 1)
+        self.obj.delete()
+        self.assertEqual(self.model.objects.count(), 0)
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

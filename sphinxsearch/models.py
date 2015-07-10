@@ -3,8 +3,6 @@
 import functools
 
 from django.db.models import QuerySet
-from django.db.models.base import ModelBase
-from django.db.models.expressions import Col
 from django.db.models.sql import AND
 from django.db.models.sql.where import ExtraWhere
 from django.utils import six
@@ -236,3 +234,22 @@ class SphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)):
     objects = SphinxManager()
 
     id = models.BigIntegerField(primary_key=True)
+
+    _excluded_update_fields = (
+        models.CharField,
+        models.TextField
+    )
+
+    def save(self, force_insert=False, force_update=False, using=None,
+             update_fields=None):
+        """ Exclude string and json attributes from update query,
+        thus they are read-only."""
+        if self.id and not force_insert and update_fields is None:
+            update_fields = [
+                f.name for f in self._meta.local_fields
+                if (f.name != self._meta.pk.name and
+                    not isinstance(f, self._excluded_update_fields))]
+        super(SphinxModel, self).save(force_insert, force_update, using,
+                                      update_fields)
+
+

@@ -5,12 +5,25 @@ import functools
 import time
 from django.core import exceptions
 
-from django.db import models
-from django.db.models import QuerySet
+from django.db import models, connection
+from django.db.models import QuerySet, Count
 from django.db.models.base import ModelBase
 from django.db.models.expressions import Col
-from django.db.models.sql import Query
+from django.db.models.sql import Query, AND
+from django.db.models.sql.where import ExtraWhere
 from django.utils import six
+from sphinxsearch.backend.sphinx import compiler
+
+
+class SphinxCount(Count):
+    """ Replaces Mysql-like COUNT('*') with COUNT(*) token."""
+    template = '%(function)s(*)'
+
+    def as_sql(self, compiler, connection, function=None, template=None):
+        sql, params = super(SphinxCount, self).as_sql(
+            compiler, connection, function=function, template=template)
+        params.remove('*')
+        return sql, params
 
 
 class SphinxQuery(Query):
@@ -20,7 +33,7 @@ class SphinxQuery(Query):
     # aggregates_module = sphinx_aggregates
     #
     # def __init__(self, *args, **kwargs):
-    #     kwargs.setdefault('where', SphinxWhereNode)
+    #     kwargs.setdefault('where', compiler.SphinxWhereNode)
     #     super(SphinxQuery, self).__init__(*args, **kwargs)
     #
     # def clone(self, klass=None, memo=None, **kwargs):
@@ -52,6 +65,16 @@ class SphinxQuery(Query):
     #     query, params = compiler.as_sql()
     #     return unicode(query % params)
 
+    def get_count(self, using):
+        """
+        Performs a COUNT() query using the current filter constraints.
+        """
+        obj = self.clone()
+        obj.add_annotation(SphinxCount('*'), alias='__count', is_summary=True)
+        number = obj.get_aggregation(using, ['__count'])['__count']
+        if number is None:
+            number = 0
+        return number
 
 
 class SphinxQuerySet(QuerySet):
@@ -161,21 +184,24 @@ class SphinxQuerySet(QuerySet):
     #             qs.query.match[field].add(expression)
     #     return qs
     #
-    # def notequal(self, **kw):
-    #     """ Support for <> term, NOT(@id=value) doesn't work."""
-    #     qs = self._clone()
-    #     where = []
-    #     for field_name, value in kw.items():
-    #         field = self.model._meta.get_field(field_name)
-    #         if type(field) is SphinxField:
-    #             col = '@%s' % field.attname
-    #         else:
-    #             col = field.db_column or field.attname
-    #         value = field.get_prep_value(sphinx_escape(value))
-    #         where.append('%s <> %s' % (col, value))
-    #     qs.query.where.add(SphinxExtraWhere(where, []), AND)
-    #     return qs
-    #
+
+    def notequal(self, **kw):
+        """ Support for <> term, NOT(@id=value) doesn't work."""
+        qs = self._clone()
+        where = []
+        params = []
+        for field_name, value in kw.items():
+            field = self.model._meta.get_field(field_name)
+            if type(field) is SphinxField:
+                col = '@%s' % field.attname
+            else:
+                col = field.db_column or field.attname
+            value = field.get_prep_value(value)
+            where.append('%s <> %%s' % col)
+            params.append(value)
+        qs.query.where.add(ExtraWhere(where, params), AND)
+        return qs
+
     # def options(self, **kw):
     #     """ Setup OPTION clause for query."""
     #     qs = self._clone()
@@ -237,7 +263,7 @@ class SphinxQuerySet(QuerySet):
 class SphinxManager(models.Manager):
     use_for_related_fields = True
 
-    def get_query_set(self):
+    def get_queryset(self):
         # Determine which fields are sphinx fields (full-text data) and
         # defer loading them. Sphinx won't return them.
         # TODO: we probably need a way to keep these from being loaded
@@ -245,6 +271,8 @@ class SphinxManager(models.Manager):
         sphinx_fields = [field.name for field in self.model._meta.fields
                          if isinstance(field, SphinxField)]
         return SphinxQuerySet(self.model).defer(*sphinx_fields)
+
+    get_query_set = get_queryset
 
     def options(self, **kw):
         return self.get_query_set().options(**kw)
@@ -326,7 +354,8 @@ class SphinxMultiField(models.IntegerField):
     def get_prep_value(self, value):
         if value is None:
             return None
-
+        if isinstance(value, (int, long)):
+            return value
         return [super(SphinxMultiField, self).get_prep_value(v) for v in value]
 
     def from_db_value(self, value, expression, connection, context):

@@ -185,8 +185,8 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #     result = template % (positive.strip(' '), negative.strip(' '))
     #     return result.strip(' ')
     #
-    # def as_sql(self, with_limits=True, with_col_aliases=False):
-    #     """ Patching final SQL query."""
+    def as_sql(self, with_limits=True, with_col_aliases=False):
+        """ Patching final SQL query."""
     #     match = getattr(self.query, 'match', None)
     #     if match:
     #         expression = []
@@ -212,8 +212,13 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #         match_expr = u"MATCH('%s')" % u' '.join(map(decode, expression))
     #         self.query.where.add(SphinxExtraWhere([match_expr], []), AND)
     #     self.query.match = dict()
-    #     sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
-    #                                                      with_col_aliases)
+
+        sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
+                                                         with_col_aliases)
+        e = self.connection.connection.literal
+        print (sql % tuple(e(a) for a in args))
+
+
     #     if (sql, args) == ('', ()):
     #         return sql, args
     #     # removing unsupported OFFSET clause
@@ -244,8 +249,8 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #     sql = re.sub(r'(%[^s])', '%%\1', sql)
     #     if isinstance(sql, six.binary_type):
     #         sql = sql.decode("utf-8")
-    #     return sql, args
-    #
+        return sql, args
+
     # def get_group_ordering(self):
     #     group_order_by = getattr(self.query, 'group_order_by', ())
     #     asc, desc = ORDER_DIR['ASC']

@@ -13,7 +13,8 @@ from testapp.models import TestModel
 class SphinxModelTestCase(TestCase):
 
     def _fixture_teardown(self):
-        self.truncate_model()
+        # self.truncate_model()
+        pass
 
     def truncate_model(self):
         c = connections['sphinx'].cursor()
@@ -45,24 +46,61 @@ class SphinxModelTestCase(TestCase):
         self._id += 1
         return self._id
 
-    def tearDown(self):
-        self.spx_queries.__exit__(*sys.exc_info())
-        for query in self.spx_queries.captured_queries:
-            print(query['sql'])
+    def reload_object(self, obj):
+        return obj._meta.model.objects.get(pk=obj.pk)
 
-    def testInsertAttributes(self):
-        obj = self.model.objects.create(**self.defaults)
-
-        other = self.reload_object(obj)
+    def assertObjectEqualsToDefaults(self, other):
         result = {k: getattr(other, k) for k in self.defaults.keys()
                   if k != 'sphinx_field'}
-
         for k in self.defaults.keys():
             if k == 'sphinx_field':
                 continue
             self.assertEqual(result[k], self.defaults[k])
 
-    def reload_object(self, obj):
-        return obj._meta.model.objects.get(pk=obj.pk)
+    def testInsertAttributes(self):
+        obj = self.model.objects.create(**self.defaults)
 
+        other = self.reload_object(obj)
+        self.assertObjectEqualsToDefaults(other)
 
+    def testSelectByAttrs(self):
+        obj = self.model.objects.create(**self.defaults)
+        exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field']
+        for key in self.defaults.keys():
+            if key in exclude:
+                continue
+            value = getattr(obj, key)
+            try:
+                other = self.model.objects.get(**{key: value})
+            except self.model.DoesNotExist:
+                self.fail("lookup failed for %s = %s" % (key, value))
+            self.assertObjectEqualsToDefaults(other)
+
+    def testSelectByMulti(self):
+        obj = self.model.objects.create(**self.defaults)
+        other = self.model.objects.get(attr_multi=obj.attr_multi[0])
+        self.assertObjectEqualsToDefaults(other)
+        other = self.model.objects.get(attr_multi_64=obj.attr_multi_64[0])
+        self.assertObjectEqualsToDefaults(other)
+        other = self.model.objects.get(attr_multi__in=[obj.attr_multi[0], 100])
+        self.assertObjectEqualsToDefaults(other)
+        other = self.model.objects.get(
+            attr_multi_64__in=[obj.attr_multi_64[0], 1])
+        self.assertObjectEqualsToDefaults(other)
+
+    def testExcludeByAttrs(self):
+        obj = self.model.objects.create(**self.defaults)
+        exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field',
+                   'attr_float'
+                   ]
+        for key in self.defaults.keys():
+            if key in exclude:
+                continue
+            value = getattr(obj, key)
+            count = self.model.objects.notequal(**{key: value}).count()
+            self.assertEqual(count, 0)
+
+    def tearDown(self):
+        self.spx_queries.__exit__(*sys.exc_info())
+        for query in self.spx_queries.captured_queries:
+            print(query['sql'])

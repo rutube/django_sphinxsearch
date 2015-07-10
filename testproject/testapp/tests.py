@@ -178,6 +178,25 @@ class SphinxModelTestCase(TestCase):
                 self.fail("lookup failed for %s = %s" % (key, value))
             self.assertObjectEqualsToDefaults(other)
 
+    def test64BitNumerics(self):
+        new_values = {
+            # 32 bit unsigned int
+            'attr_uint': 2**31 + 1,
+            'attr_multi': [2**31 + 1],
+            # 64 bit signed int
+            'attr_bigint': 2**63 + 1 - 2**64,
+            'attr_multi_64': [2**63 + 1 - 2**64]
+        }
+        for k, v in new_values.items():
+            setattr(self.obj, k, v)
+
+        # Check UPDATE mode (string attributes are not updated)
+        self.obj.save(update_fields=new_values.keys())
+
+        other = self.reload_object(self.obj)
+        self.assertObjectEqualsToDefaults(other, defaults=new_values)
+
+
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())
         for query in self.spx_queries.captured_queries:

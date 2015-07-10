@@ -6,6 +6,7 @@ import time
 
 from django.core import exceptions
 from django.db import models
+from django.utils import six
 
 
 class SphinxField(models.TextField):
@@ -25,7 +26,7 @@ class SphinxDateTimeField(models.FloatField):
     def get_prep_value(self, value):
         if isinstance(value, (datetime.datetime, datetime.date)):
             return time.mktime(value.timetuple())
-        elif isinstance(value, (int, long, float)):
+        elif isinstance(value, six.integer_types + (float,)):
             return value
         else:
             raise ValueError("Invalid value for UNIX_TIMESTAMP")
@@ -39,7 +40,7 @@ class SphinxMultiField(models.IntegerField):
     def get_prep_value(self, value):
         if value is None:
             return None
-        if isinstance(value, (int, long)):
+        if isinstance(value, six.integer_types):
             return value
         return [super(SphinxMultiField, self).get_prep_value(v) for v in value]
 

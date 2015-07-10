@@ -8,8 +8,8 @@ env:
 # command to install dependencies
 install:
   - ls /usr/local/sphinx-*/
-  - pip install Django==$DJANGO --use-mirrors
-  - pip install mysql-python --use-mirrors
+  - pip install Django==$DJANGO
+  - pip install -r requires.txt
 
 # command to run tests
 script:

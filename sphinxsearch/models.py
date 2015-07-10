@@ -1,88 +1,27 @@
 # coding: utf-8
 
-import datetime
 import functools
-import time
-from django.core import exceptions
 
-from django.db import models, connection
-from django.db.models import QuerySet, Count
+from django.db.models import QuerySet
 from django.db.models.base import ModelBase
 from django.db.models.expressions import Col
-from django.db.models.sql import Query, AND
+from django.db.models.sql import AND
 from django.db.models.sql.where import ExtraWhere
 from django.utils import six
-from sphinxsearch.backend.sphinx import compiler
 
-
-class SphinxCount(Count):
-    """ Replaces Mysql-like COUNT('*') with COUNT(*) token."""
-    template = '%(function)s(*)'
-
-    def as_sql(self, compiler, connection, function=None, template=None):
-        sql, params = super(SphinxCount, self).as_sql(
-            compiler, connection, function=function, template=template)
-        params.remove('*')
-        return sql, params
-
-
-class SphinxQuery(Query):
-    _clonable = ('options', 'match', 'group_limit', 'group_order_by',
-                 'with_meta')
-    #
-    # aggregates_module = sphinx_aggregates
-    #
-    # def __init__(self, *args, **kwargs):
-    #     kwargs.setdefault('where', compiler.SphinxWhereNode)
-    #     super(SphinxQuery, self).__init__(*args, **kwargs)
-    #
-    # def clone(self, klass=None, memo=None, **kwargs):
-    #     query = super(SphinxQuery, self).clone(klass=klass, memo=memo, **kwargs)
-    #     for attr_name in self._clonable:
-    #         value = getattr(self, attr_name, None)
-    #         if value:
-    #             setattr(query, attr_name, value)
-    #     return query
-    #
-    # def __str__(self):
-    #     def to_str(text):
-    #         if type(text) is unicode:
-    #             # u'тест' => '\xd1\x82\xd0\xb5\xd1\x81\xd1\x82'
-    #             return text.encode('utf-8')
-    #         else:
-    #             # 'тест' => u'\u0442\u0435\u0441\u0442' => '\xd1\x82\xd0\xb5\xd1\x81\xd1\x82'
-    #             # 'test123' => 'test123'
-    #             return str(text)
-    #
-    #     compiler = SphinxQLCompiler(self, connection, None)
-    #     query, params = compiler.as_sql()
-    #
-    #     params = tuple(map(lambda p: to_str(p), params))
-    #     return to_str(query % params)
-    #
-    # def __unicode__(self):
-    #     compiler = SphinxQLCompiler(self, connection, None)
-    #     query, params = compiler.as_sql()
-    #     return unicode(query % params)
-
-    def get_count(self, using):
-        """
-        Performs a COUNT() query using the current filter constraints.
-        """
-        obj = self.clone()
-        obj.add_annotation(SphinxCount('*'), alias='__count', is_summary=True)
-        number = obj.get_aggregation(using, ['__count'])['__count']
-        if number is None:
-            number = 0
-        return number
+from sphinxsearch.fields import *
+from sphinxsearch import sql
 
 
 class SphinxQuerySet(QuerySet):
-    pass
-
     def __init__(self, model, **kwargs):
-        kwargs.setdefault('query', SphinxQuery(model))
+        kwargs.setdefault('query', sql.SphinxQuery(model))
         super(SphinxQuerySet, self).__init__(model, **kwargs)
+
+    def exclude(self, *args, **kwargs):
+        raise NotImplementedError(
+            "sphinxsearch doens't support negated filters")
+
     #
     # def using(self, alias):
     #     # Ignore the alias. This will allow the Django router to decide
@@ -290,101 +229,10 @@ class SphinxManager(models.Manager):
         return self.get_query_set().get(*args, **kw)
 
 
-class SphinxField(models.TextField):
-    """ Non-selectable indexed string field
-
-    In sphinxsearch config terms, sql_field_string or rt_field.
-
-    """
-
-
-class SphinxDateTimeField(models.FloatField):
-    """ Sphinx timestamp field for sql_attr_timestamp and rt_attr_timestamp."""
-    def get_prep_value(self, value):
-        if isinstance(value, (datetime.datetime, datetime.date)):
-            return time.mktime(value.timetuple())
-        elif isinstance(value, (int, long, float)):
-            return value
-        else:
-            raise ValueError("Invalid value for UNIX_TIMESTAMP")
-
-    def from_db_value(self, value, expression, connection, context):
-        return datetime.datetime.fromtimestamp(value)
-
-
-class SphinxCol(Col):
-    def as_sql(self, compiler, connection):
-        qn = compiler.quote_name_unless_alias
-        return "%s" % (qn(self.target.column,)), []
-
-
-class SphinxModelBase(ModelBase):
-    def __new__(cls, name, bases, attrs):
-        for attr in attrs.values():
-            if isinstance(attr, models.Field):
-                col_patched = getattr(attr, '_col_patched', False)
-                if not col_patched:
-                    cls.patch_col_class(attr)
-        return super(SphinxModelBase, cls).__new__(cls, name, bases, attrs)
-
-    def add_to_class(cls, name, value):
-        super(SphinxModelBase, cls).add_to_class(name, value)
-
-    @classmethod
-    def patch_col_class(cls, field):
-        @functools.wraps(field.get_col)
-        def wrapper(alias, output_field=None):
-            col = models.Field.get_col(field, alias, output_field=output_field)
-            col.__class__ = SphinxCol
-            return col
-        field.get_col = wrapper
-
-
-class SphinxModel(six.with_metaclass(SphinxModelBase, models.Model)):
+class SphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)):
     class Meta:
         abstract = True
 
     objects = SphinxManager()
 
     id = models.BigIntegerField(primary_key=True)
-
-
-class SphinxMultiField(models.IntegerField):
-
-    def get_prep_value(self, value):
-        if value is None:
-            return None
-        if isinstance(value, (int, long)):
-            return value
-        return [super(SphinxMultiField, self).get_prep_value(v) for v in value]
-
-    def from_db_value(self, value, expression, connection, context):
-        if value is None:
-            return value
-        try:
-            return list(map(int, value.split(',')))
-        except (TypeError, ValueError):
-            raise exceptions.ValidationError(
-                self.error_messages['invalid'],
-                code='invalid',
-                params={'value': value},
-            )
-
-    def to_python(self, value):
-        if value is None:
-            return value
-        try:
-            return list(map(int, value.split(',')))
-        except (TypeError, ValueError):
-            raise exceptions.ValidationError(
-                self.error_messages['invalid'],
-                code='invalid',
-                params={'value': value},
-            )
-
-
-
-
-
-class SphinxMulti64Field(SphinxMultiField):
-    pass

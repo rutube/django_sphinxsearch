@@ -1,10 +1,11 @@
 # coding: utf-8
 
 # $Id: $
-from django.core import exceptions
-from django.db import models
 import datetime
 import time
+
+from django.core import exceptions
+from django.db import models
 
 
 class SphinxField(models.TextField):
@@ -45,6 +46,8 @@ class SphinxMultiField(models.IntegerField):
     def from_db_value(self, value, expression, connection, context):
         if value is None:
             return value
+        if value == '':
+            return []
         try:
             return list(map(int, value.split(',')))
         except (TypeError, ValueError):

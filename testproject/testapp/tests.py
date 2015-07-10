@@ -2,6 +2,7 @@
 
 # $Id: $
 from datetime import datetime, timedelta
+from unittest import skip
 from django.conf import settings
 from django.db import connections
 from django.test import TestCase
@@ -110,7 +111,6 @@ class SphinxModelTestCase(TestCase):
 
     def testUpdates(self):
         new_values = {
-            'sphinx_field': "another_field",
             'attr_uint': 200,
             'attr_bool': False,
             'attr_bigint': 2**35,
@@ -118,19 +118,38 @@ class SphinxModelTestCase(TestCase):
             'attr_multi': [6,7,8],
             'attr_multi_64': [2**34, 2**35],
             'attr_timestamp': self.now + timedelta(seconds=60),
-            # string-based attributes cannot be updated.
-            # 'attr_string': "another string",
-            # "attr_json": {"json": "other", 'add': 3},
         }
 
         for k, v in new_values.items():
             setattr(self.obj, k, v)
 
+        # Check UPDATE mode (string attributes are not updated)
+        self.obj.save(update_fields=new_values.keys())
+
+        other = self.reload_object(self.obj)
+        self.assertObjectEqualsToDefaults(other, defaults=new_values)
+
+        # Check REPLACE mode (string and json attributes are updated by
+        # replacing whole row only)
+        string_defaults = {
+            'sphinx_field': "another_field",
+            'attr_string': "another string",
+            'attr_json': {"json": "other", 'add': 3},
+        }
+        new_values.update(string_defaults)
+        for k, v in string_defaults.items():
+            setattr(self.obj, k, v)
+
         self.obj.save()
 
         other = self.reload_object(self.obj)
-
         self.assertObjectEqualsToDefaults(other, defaults=new_values)
+
+    def testBulkUpdate(self):
+        qs = self.model.objects.filter(attr_uint=self.defaults['attr_uint'])
+        qs.update(attr_bool=not self.defaults['attr_bool'])
+        other = self.reload_object(self.obj)
+        self.assertFalse(other.attr_bool)
 
     def testDelete(self):
         self.assertEqual(self.model.objects.count(), 1)
@@ -141,8 +160,23 @@ class SphinxModelTestCase(TestCase):
         other = self.model.objects.filter(sphinx_field__search="hello")[0]
         self.assertEqual(other.id, self.obj.id)
 
+    @skip("FIXME")
+    def testDjangoSearchMultiple(self):
         list(self.model.objects.filter(sphinx_field__search="@sdfsff 'sdfdf'",
                                        other_field__search="sdf"))
+
+    def testAdminSupportIssues(self):
+        exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field']
+        for key in self.defaults.keys():
+            if key in exclude:
+                continue
+            value = getattr(self.obj, key)
+            try:
+                key = '%s__exact' % key
+                other = self.model.objects.get(**{key: value})
+            except self.model.DoesNotExist:
+                self.fail("lookup failed for %s = %s" % (key, value))
+            self.assertObjectEqualsToDefaults(other)
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

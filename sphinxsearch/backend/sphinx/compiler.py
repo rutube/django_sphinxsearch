@@ -1,16 +1,11 @@
 # coding: utf-8
-import django
-from django.db.models.lookups import Search
+from django.core.exceptions import FieldError
+from django.db import models
+from django.db.models.lookups import Search, Exact
 
 from django.db.models.sql import compiler
-from django.db.models.sql.query import get_order_dir, ORDER_DIR
 
-from django.db.models.sql.where import WhereNode, ExtraWhere, AND
-from django.db.models.sql.where import EmptyShortCircuit, EmptyResultSet
 # from django.db.models.sql.expressions import SQLEvaluator
-import re
-from django.utils import six
-from django.utils.datastructures import SortedDict
 #
 # DJANGO15 = (1, 5, 0, 'alpha', 0)
 # DJANGO16 = (1, 6, 0, 'alpha', 0)
@@ -228,55 +223,100 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SphinxQLCompiler):
 
 class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
     def as_sql(self):
-        sql, args = super(SQLUpdateCompiler, self).as_sql()
+        node = self.is_single_row_update()
+        if node:
+            need_replace = self.has_string_attrs()
+        if node and need_replace:
+            sql, args = self.as_replace(node)
+        else:
+            sql, args = super(SQLUpdateCompiler, self).as_sql()
         e = self.connection.connection.literal
         print (sql % tuple(e(a) for a in args))
 
         return sql, args
 
-    # def as_sql(self):
-    #     qn = self.connection.ops.quote_name
-    #     opts = self.query.model._meta
-    #     result = ['REPLACE INTO %s' % qn(opts.db_table)]
-    #     # This is a bit ugly, we have to scrape information from the where clause
-    #     # and put it into the field/values list. Sphinx will not accept an UPDATE
-    #     # statement that includes full text data, only INSERT/REPLACE INTO.
-    #     node = self.query.where.children[0]
-    #
-    #     # FIXME: !!!!!
-    #     lvalue, lookup_type, value_annot, params_or_value = node
-    #
-    #     (table_name, column_name, column_type), val = lvalue.process(lookup_type, params_or_value, self.connection)
-    #     fields, values, params = [column_name], ['%s'], [val[0]]
-    #     # Now build the rest of the fields into our query.
-    #     for field, model, val in self.query.values:
-    #         if hasattr(val, 'prepare_database_save'):
-    #             val = val.prepare_database_save(field)
-    #         else:
-    #             val = field.get_db_prep_save(val, connection=self.connection)
-    #
-    #         # Getting the placeholder for the field.
-    #         if hasattr(field, 'get_placeholder'):
-    #             placeholder = field.get_placeholder(val, self.connection)
-    #         else:
-    #             placeholder = '%s'
-    #
-    #         if hasattr(val, 'evaluate'):
-    #             val = SQLEvaluator(val, self.query, allow_joins=False)
-    #         name = field.column
-    #         if hasattr(val, 'as_sql'):
-    #             sql, params = val.as_sql(qn, self.connection)
-    #             values.append(sql)
-    #             params.extend(params)
-    #         elif val is not None:
-    #             values.append(placeholder)
-    #             params.append(val)
-    #         else:
-    #             values.append('NULL')
-    #         fields.append(name)
-    #     result.append('(%s)' % ', '.join(fields))
-    #     result.append('VALUES (%s)' % ', '.join(values))
-    #     return ' '.join(result), params
+    def is_single_row_update(self):
+        where = self.query.where
+        node = None
+        if len(where.children) == 1:
+            node = where.children[0]
+        if not isinstance(node, Exact):
+            node = None
+        if not node.lhs.field.primary_key:
+            node = None
+        return node
+
+    def as_replace(self, where_node):
+        """
+        Creates the SQL for this query. Returns the SQL string and list of
+        parameters.
+        """
+        self.pre_sql_setup()
+        if not self.query.values:
+            return '', ()
+        table = self.query.tables[0]
+        qn = self.quote_name_unless_alias
+        result = ['REPLACE INTO %s' % qn(table)]
+        meta = self.query.model._meta
+        self.query.values.append((meta.pk, self.query.model, where_node.rhs))
+        columns, values, update_params = [], [], []
+
+        for field, model, val in self.query.values:
+            if hasattr(val, 'resolve_expression'):
+                val = val.resolve_expression(self.query, allow_joins=False, for_save=True)
+                if val.contains_aggregate:
+                    raise FieldError("Aggregate functions are not allowed in this query")
+            elif hasattr(val, 'prepare_database_save'):
+                if field.rel:
+                    val = field.get_db_prep_save(
+                        val.prepare_database_save(field),
+                        connection=self.connection,
+                    )
+                else:
+                    raise TypeError("Database is trying to update a relational field "
+                                    "of type %s with a value of type %s. Make sure "
+                                    "you are setting the correct relations" %
+                                    (field.__class__.__name__, val.__class__.__name__))
+            else:
+                val = field.get_db_prep_save(val, connection=self.connection)
+
+            # Getting the placeholder for the field.
+            if hasattr(field, 'get_placeholder'):
+                placeholder = field.get_placeholder(val, self, self.connection)
+            else:
+                placeholder = '%s'
+            name = field.column
+            columns.append(qn(name))
+            if hasattr(val, 'as_sql'):
+                sql, params = self.compile(val)
+                values.append(sql)
+                update_params.extend(params)
+            elif val is not None:
+                values.append(placeholder)
+                update_params.append(val)
+            else:
+                values.append('NULL')
+        if not values:
+            return '', ()
+        result.append('(')
+        result.append(', '.join(columns))
+        result.append(') VALUES (')
+        result.append(', '.join(values))
+        result.append(')')
+        # where, params = self.compile(self.query.where)
+        # if where:
+        #     result.append('WHERE %s' % where)
+        return ' '.join(result), tuple(update_params)
+
+    def has_string_attrs(self):
+        _excluded_update_fields = (
+            models.CharField,
+            models.TextField
+        )
+        for field, model, val in self.query.values:
+            if isinstance(field, _excluded_update_fields):
+                return True
+        return False
 
 
 class SQLAggregateCompiler(compiler.SQLAggregateCompiler, SphinxQLCompiler):

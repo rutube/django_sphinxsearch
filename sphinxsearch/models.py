@@ -237,17 +237,3 @@ class SphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)):
         models.CharField,
         models.TextField
     )
-
-    def save(self, force_insert=False, force_update=False, using=None,
-             update_fields=None):
-        """ Exclude string and json attributes from update query,
-        thus they are read-only."""
-        if self.id and not force_insert and update_fields is None:
-            update_fields = [
-                f.name for f in self._meta.local_fields
-                if (f.name != self._meta.pk.name and
-                    not isinstance(f, self._excluded_update_fields))]
-        super(SphinxModel, self).save(force_insert, force_update, using,
-                                      update_fields)
-
-

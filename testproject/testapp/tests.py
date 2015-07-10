@@ -19,7 +19,7 @@ class SphinxModelTestCase(TestCase):
         pass
 
     def truncate_model(self):
-        c = connections['sphinx'].cursor()
+        c = connections[settings.SPHINX_DATABASE_NAME].cursor()
         c.execute("TRUNCATE RTINDEX %s" % self.model._meta.db_table)
 
     def setUp(self):
@@ -39,7 +39,8 @@ class SphinxModelTestCase(TestCase):
             'attr_string': "hello sphinx attr",
             "attr_json": {"json": "test"},
         }
-        self.spx_queries = CaptureQueriesContext(connections['sphinx'])
+        self.spx_queries = CaptureQueriesContext(
+            connections[settings.SPHINX_DATABASE_NAME])
         self.spx_queries.__enter__()
         self.obj = self.model.objects.create(**self.defaults)
 

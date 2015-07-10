@@ -75,14 +75,12 @@ WSGI_APPLICATION = 'testproject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/1.8/ref/settings/#databases
 
-SPHINX_DATABASE_NAME = 'sphinx'
+SPHINX_DATABASE_NAME = 'default'
+
+import pymysql
+pymysql.install_as_MySQLdb()
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'sphinxsearch.backend.sphinx',
-        'HOST': '127.0.0.1',
-        'PORT': 9306,
-    },
     SPHINX_DATABASE_NAME: {
         'ENGINE': 'sphinxsearch.backend.sphinx',
         'HOST': '127.0.0.1',

@@ -1,0 +1,19 @@
+language: python
+python:
+  - "2.7"
+
+env:
+  - DJANGO=1.8
+
+# command to install dependencies
+install:
+  - ls /usr/local/sphinx-*/
+  - pip install Django==$DJANGO --use-mirrors
+  - pip install mysql-python --use-mirrors
+
+# command to run tests
+script:
+    - searchd -c `pwd`/test_config/sphinx.conf
+    - python ./manage.py test
+
+after-script: kill `cat /tmp/searchd.pid`

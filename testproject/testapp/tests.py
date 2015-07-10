@@ -35,11 +35,12 @@ class SphinxModelTestCase(TestCase):
             'attr_multi': [1,2,3],
             'attr_multi_64': [2**33, 2**34],
             'attr_timestamp': self.now,
-            'attr_string': "string attr",
+            'attr_string': "hello sphinx world",
             "attr_json": {"json": "test"},
         }
         self.spx_queries = CaptureQueriesContext(connections['sphinx'])
         self.spx_queries.__enter__()
+        self.obj = self.model.objects.create(**self.defaults)
 
     @property
     def newid(self):
@@ -58,18 +59,15 @@ class SphinxModelTestCase(TestCase):
             self.assertEqual(result[k], self.defaults[k])
 
     def testInsertAttributes(self):
-        obj = self.model.objects.create(**self.defaults)
-
-        other = self.reload_object(obj)
+        other = self.reload_object(self.obj)
         self.assertObjectEqualsToDefaults(other)
 
     def testSelectByAttrs(self):
-        obj = self.model.objects.create(**self.defaults)
         exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field']
         for key in self.defaults.keys():
             if key in exclude:
                 continue
-            value = getattr(obj, key)
+            value = getattr(self.obj, key)
             try:
                 other = self.model.objects.get(**{key: value})
             except self.model.DoesNotExist:
@@ -77,16 +75,15 @@ class SphinxModelTestCase(TestCase):
             self.assertObjectEqualsToDefaults(other)
 
     def testSelectByMulti(self):
-        obj = self.model.objects.create(**self.defaults)
-        other = self.model.objects.get(attr_multi=obj.attr_multi[0])
-        self.assertObjectEqualsToDefaults(other)
-        other = self.model.objects.get(attr_multi_64=obj.attr_multi_64[0])
-        self.assertObjectEqualsToDefaults(other)
-        other = self.model.objects.get(attr_multi__in=[obj.attr_multi[0], 100])
-        self.assertObjectEqualsToDefaults(other)
-        other = self.model.objects.get(
-            attr_multi_64__in=[obj.attr_multi_64[0], 1])
-        self.assertObjectEqualsToDefaults(other)
+        multi_lookups = dict(
+            attr_multi=self.obj.attr_multi[0],
+            attr_multi_64=self.obj.attr_multi_64[0],
+            attr_multi__in=[self.obj.attr_multi[0], 100],
+            attr_multi_64__in=[self.obj.attr_multi_64[0], 1]
+        )
+        for k, v in multi_lookups.items():
+            other = self.model.objects.get(**{k: v})
+            self.assertObjectEqualsToDefaults(other)
 
     def testExcludeByAttrs(self):
         obj = self.model.objects.create(**self.defaults)
@@ -99,6 +96,17 @@ class SphinxModelTestCase(TestCase):
             value = getattr(obj, key)
             count = self.model.objects.notequal(**{key: value}).count()
             self.assertEqual(count, 0)
+
+    def testNumericAttrLookups(self):
+        numeric_lookups = dict(
+            attr_uint__gte=0,
+            attr_timestamp__gte=self.now,
+            attr_multi__gte=0
+        )
+
+        for k, v in numeric_lookups.items():
+            other = self.model.objects.get(**{k: v})
+            self.assertObjectEqualsToDefaults(other)
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

@@ -11,6 +11,7 @@ from testapp.models import TestModel
 
 
 class SphinxModelTestCase(TestCase):
+    _id = 0
 
     def _fixture_teardown(self):
         # self.truncate_model()
@@ -24,9 +25,8 @@ class SphinxModelTestCase(TestCase):
         self.model = TestModel
         self.truncate_model()
         self.now = datetime.now().replace(microsecond=0)
-        self._id = 0
         self.defaults = {
-            'id': self.newid,
+            'id': self.newid(),
             'sphinx_field': "sphinx_field",
             'attr_uint': 100500,
             'attr_bool': True,
@@ -42,10 +42,10 @@ class SphinxModelTestCase(TestCase):
         self.spx_queries.__enter__()
         self.obj = self.model.objects.create(**self.defaults)
 
-    @property
-    def newid(self):
-        self._id += 1
-        return self._id
+    @classmethod
+    def newid(cls):
+        cls._id += 1
+        return cls._id
 
     def reload_object(self, obj):
         return obj._meta.model.objects.get(pk=obj.pk)
@@ -86,14 +86,13 @@ class SphinxModelTestCase(TestCase):
             self.assertObjectEqualsToDefaults(other)
 
     def testExcludeByAttrs(self):
-        obj = self.model.objects.create(**self.defaults)
         exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field',
                    'attr_float'
                    ]
         for key in self.defaults.keys():
             if key in exclude:
                 continue
-            value = getattr(obj, key)
+            value = getattr(self.obj, key)
             count = self.model.objects.notequal(**{key: value}).count()
             self.assertEqual(count, 0)
 

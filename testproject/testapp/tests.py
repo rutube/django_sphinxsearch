@@ -27,7 +27,7 @@ class SphinxModelTestCase(TestCase):
         self.now = datetime.now().replace(microsecond=0)
         self.defaults = {
             'id': self.newid(),
-            'sphinx_field': "sphinx_field",
+            'sphinx_field': "hello sphinx field",
             'attr_uint': 100500,
             'attr_bool': True,
             'attr_bigint': 2**33,
@@ -35,7 +35,7 @@ class SphinxModelTestCase(TestCase):
             'attr_multi': [1,2,3],
             'attr_multi_64': [2**33, 2**34],
             'attr_timestamp': self.now,
-            'attr_string': "hello sphinx world",
+            'attr_string': "hello sphinx attr",
             "attr_json": {"json": "test"},
         }
         self.spx_queries = CaptureQueriesContext(connections['sphinx'])
@@ -136,6 +136,13 @@ class SphinxModelTestCase(TestCase):
         self.assertEqual(self.model.objects.count(), 1)
         self.obj.delete()
         self.assertEqual(self.model.objects.count(), 0)
+
+    def testDjangoSearch(self):
+        other = self.model.objects.filter(sphinx_field__search="hello")[0]
+        self.assertEqual(other.id, self.obj.id)
+
+        list(self.model.objects.filter(sphinx_field__search="@sdfsff 'sdfdf'",
+                                       other_field__search="sdf"))
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

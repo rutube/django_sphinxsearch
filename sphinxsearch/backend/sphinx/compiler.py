@@ -1,5 +1,6 @@
 # coding: utf-8
 import django
+from django.db.models.lookups import Search
 
 from django.db.models.sql import compiler
 from django.db.models.sql.query import get_order_dir, ORDER_DIR
@@ -22,70 +23,19 @@ from django.utils.datastructures import SortedDict
 #         return " AND ".join(sqls), tuple(self.params or ())
 #
 #
-# class SphinxWhereNode(WhereNode):
-#     def sql_for_columns(self, data, qn, connection, field_internal_type=None):
-#         table_alias, name, db_type = data
-#         if django.get_version() < "1.6":
-#             return connection.ops.field_cast_sql(db_type) % name
-#         return connection.ops.field_cast_sql(db_type, field_internal_type) % name
-#
-#     def make_atom(self, child, qn, connection):
-#         """
-#         Transform search, the keyword should not be quoted.
-#         """
-#         lvalue, lookup_type, value_annot, params_or_value = child
-#         sql, params = super(SphinxWhereNode, self).make_atom(child, qn, connection)
-#         if lookup_type == 'search':
-#             if hasattr(lvalue, 'process'):
-#                 try:
-#                     lvalue, params = lvalue.process(lookup_type, params_or_value, connection)
-#                 except EmptyShortCircuit:
-#                     raise EmptyResultSet
-#             if isinstance(lvalue, tuple):
-#                 # A direct database column lookup.
-#                 field_sql = self.sql_for_columns(lvalue, qn, connection)
-#             else:
-#                 # A smart object with an as_sql() method.
-#                 field_sql = lvalue.as_sql(qn, connection)
-#             # TODO: There are a couple problems here.
-#             # 1. The user _might_ want to search only a specific field.
-#             # 2. However, since Django requires a field name to use the __search operator
-#             #    There is no way to do a search in _all_ fields.
-#             # 3. Because, using multiple __search operators is not supported.
-#             # So, we need to merge multiped __search operators into a single MATCH(), we
-#             # can't do that here, we have to do that one level up...
-#             # Ignore the field name, search all fields:
-#             params = ('@* %s' % params[0], )
-#             # _OR_ respect the field name, and search on it:
-#             #params = ('@%s %s' % (field_sql, params[0]), )
-#         if self._real_negated:
-#             col = lvalue.col
-#             if lookup_type == 'exact':
-#                 sql = '%s <> %%s' % col
-#             elif lookup_type == 'in':
-#                 params_placeholder = '(%s)' % (', '.join(['%s'] * len(params)))
-#                 sql = '%s NOT IN %s' % (col, params_placeholder)
-#             else:
-#                 raise ValueError("Negative '%s' lookup not supported" % lookup_type)
-#         return sql, params
-#
-#     def as_sql(self, qn, connection):
-#         if not hasattr(self, '_real_negated'):
-#             self._real_negated = self.negated
-#         # don't allow Django to add unsupported NOT (...) before all lookups
-#         self.negated = False
-#         # pass-through real negated value (OR connector not supported)
-#         if self._real_negated:
-#             for child in self.children:
-#                 if type(child) is tuple:
-#                     child[0]._real_negated = True
-#                 else:
-#                     child._real_negated = True
-#         sql_string, result_params = super(SphinxWhereNode, self).as_sql(qn, connection)
-#         self.negated = self._real_negated
-#         return sql_string, result_params
+from sphinxsearch.utils import sphinx_escape
+
 
 class SphinxQLCompiler(compiler.SQLCompiler):
+
+    def compile(self, node, select_format=False):
+        sql, params = super(SphinxQLCompiler, self).compile(node, select_format)
+        if isinstance(node, Search):
+            search_text = sphinx_escape(params[0])
+            sql = sql % search_text
+            params = []
+
+        return sql, params
 
     # def get_columns(self, *args, **kwargs):
     #     result = columns = super(SphinxQLCompiler, self).get_columns(*args, **kwargs)
@@ -101,6 +51,8 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #         columns[i] = re.sub(r"^\((.*)\) AS ([\w\d\_]+)$", '\\1 AS \\2',
     #                             column)
     #     return result
+
+
 
     def quote_name_unless_alias(self, name):
         # TODO: remove this when no longer needed.

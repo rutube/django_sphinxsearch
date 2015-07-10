@@ -1,7 +1,5 @@
 # coding: utf-8
 
-import functools
-
 from django.db.models import QuerySet
 from django.db.models.sql import AND
 from django.db.models.sql.where import ExtraWhere

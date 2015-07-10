@@ -8,10 +8,10 @@ from django.db.backends.mysql.creation import DatabaseCreation as MySQLDatabaseC
 
 class SphinxOperations(MySQLDatabaseOperations):
     compiler_module = "sphinxsearch.backend.sphinx.compiler"
-    #
-    # def fulltext_search_sql(self, field_name):
-    #     return 'MATCH (%s)'
-    #
+
+    def fulltext_search_sql(self, field_name):
+        return 'MATCH (\'@%s "%%s"\')' % field_name
+
 
     # def force_no_ordering(self):
     #     """

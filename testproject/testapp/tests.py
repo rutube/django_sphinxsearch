@@ -214,7 +214,8 @@ class SphinxModelTestCase(TestCase):
         expected = [self.obj.id]
         for i in range(10):
             id = self.newid()
-            self.model.objects.create(id=id, attr_json={},
+            self.model.objects.create(id=id,
+                                      attr_json={},
                                       attr_uint=i,
                                       attr_timestamp=self.now)
             expected.append(id)
@@ -225,8 +226,6 @@ class SphinxModelTestCase(TestCase):
         qs = list(self.model.objects.order_by('-attr_uint'))
         expected = [self.obj.id] + list(reversed(expected[1:]))
         self.assertEqual([q.id for q in qs], expected)
-
-
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

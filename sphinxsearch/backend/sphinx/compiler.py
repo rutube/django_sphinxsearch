@@ -48,33 +48,6 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #                             column)
     #     return result
 
-    # def get_ordering(self):
-    #     """ Remove index name (model.Meta.db_table) from ORDER_BY clause."""
-    #     ordering = super(SphinxQLCompiler, self).get_ordering()
-    #     if django.VERSION < DJANGO16:
-    #         result, group_by = ordering
-    #     else:
-    #         result, params, group_by = ordering
-    #
-    #     # excluding from ordering_group_by items added from "extra_select"
-    #     exclude = {g[0] for g in self.query.extra_select.values()}
-    #     group_by = [g for g in group_by if g[0] not in exclude]
-    #
-    #     # processing result ('idx.field1', 'idx.field2')
-    #     func = lambda name: name.split('.', 1)[-1]
-    #     result = map(func, result)
-    #
-    #     # processing group_by tuples: (('idx.field1', []), ('idx.field2', []))
-    #     group_by = map(lambda t: (func(t[0]),) + t[1:], group_by)
-    #
-    #     # TODO: process self.query.ordering_aliases
-    #     # self.query.ordering_aliases is also set by parent get_ordering()
-    #     # method, and it also may contain db_table name.
-    #
-    #     if django.VERSION < DJANGO16:
-    #         return result, group_by
-    #     return result, params, group_by
-    #
     # def get_grouping(self, having_group_by=None, ordering_group_by=None, ):
     #     # excluding from ordering_group_by items added from "extra_select"
     #     extra = self.query.extra

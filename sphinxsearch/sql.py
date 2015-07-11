@@ -141,8 +141,9 @@ class SphinxQuery(Query):
 
 class SphinxCol(Col):
     def as_sql(self, compiler, connection):
-        qn = compiler.quote_name_unless_alias
-        return "%s" % (qn(self.target.column,)), []
+        # As column names in SphinxQL couldn't be escaped with `backticks`,
+        # simply return column name
+        return self.target.column, []
 
 
 class SphinxModelBase(ModelBase):

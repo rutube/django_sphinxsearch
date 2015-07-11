@@ -48,15 +48,6 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #                             column)
     #     return result
 
-
-
-    def quote_name_unless_alias(self, name):
-        # TODO: remove this when no longer needed.
-        # This is to remove the `` backticks from identifiers.
-        # http://sphinxsearch.com/bugs/view.php?id=1150
-        # while bug is closed, () and `` together still cause syntax error
-        return name
-
     # def get_ordering(self):
     #     """ Remove index name (model.Meta.db_table) from ORDER_BY clause."""
     #     ordering = super(SphinxQLCompiler, self).get_ordering()
@@ -223,6 +214,7 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SphinxQLCompiler):
 class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
     def as_sql(self):
         node = self.is_single_row_update()
+        need_replace = False
         if node:
             need_replace = self.has_string_attrs()
         if node and need_replace:
@@ -247,8 +239,9 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
 
     def as_replace(self, where_node):
         """
-        Creates the SQL for this query. Returns the SQL string and list of
-        parameters.
+        Performs single-row UPDATE as REPLACE INTO query.
+
+        Must be used to change string attributes or indexed fields.
         """
         self.pre_sql_setup()
         if not self.query.values:
@@ -302,9 +295,6 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
         result.append(') VALUES (')
         result.append(', '.join(values))
         result.append(')')
-        # where, params = self.compile(self.query.where)
-        # if where:
-        #     result.append('WHERE %s' % where)
         return ' '.join(result), tuple(update_params)
 
     def has_string_attrs(self):

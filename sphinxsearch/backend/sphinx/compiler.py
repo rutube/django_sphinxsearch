@@ -1,4 +1,5 @@
 # coding: utf-8
+import re
 from django.core.exceptions import FieldError
 from django.db import models
 from django.db.models.lookups import Search, Exact
@@ -162,16 +163,12 @@ class SphinxQLCompiler(compiler.SQLCompiler):
 
         sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
                                                          with_col_aliases)
-        e = self.connection.connection.literal
-        print (sql % tuple(e(a) for a in args))
+        if (sql, args) == ('', ()):
+            return sql, args
+        # removing unsupported OFFSET clause
+        # replacing it with LIMIT <offset>, <limit>
+        sql = re.sub(r'LIMIT ([\d]+) OFFSET ([\d]+)$', 'LIMIT \\2, \\1', sql)
 
-
-    #     if (sql, args) == ('', ()):
-    #         return sql, args
-    #     # removing unsupported OFFSET clause
-    #     # replacing it with LIMIT <offset>, <limit>
-    #     sql = re.sub(r'LIMIT ([\d]+) OFFSET ([\d]+)$', 'LIMIT \\2, \\1', sql)
-    #
     #     # patching GROUP BY clause
     #     group_limit = getattr(self.query, 'group_limit', '')
     #     group_by_ordering = self.get_group_ordering()
@@ -185,17 +182,19 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #         group_by += group_by_ordering
     #     sql = re.sub(r'GROUP BY (([\w\d_]+)(, [\w\d_]+)*)', group_by, sql)
     #
-    #     # adding sphinx OPTION clause
-    #     # TODO: syntax check for option values is not performed
-    #     options = getattr(self.query, 'options', None)
-    #     if options:
-    #         sql += ' OPTION %s' % ', '.join(
-    #             ["%s=%s" % i for i in options.items()]) or ''
+        # adding sphinx OPTION clause
+        # TODO: syntax check for option values is not performed
+        options = getattr(self.query, 'options', None)
+        if options:
+            sql += ' OPTION %s' % ', '.join(
+                ["%s=%s" % i for i in options.items()]) or ''
     #
     #     # percents, added by raw formatting queries, escaped as %%
     #     sql = re.sub(r'(%[^s])', '%%\1', sql)
     #     if isinstance(sql, six.binary_type):
     #         sql = sql.decode("utf-8")
+    #     e = self.connection.connection.literal
+    #     print (sql % tuple(e(a) for a in args))
         return sql, args
 
     # def get_group_ordering(self):
@@ -230,8 +229,8 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
             sql, args = self.as_replace(node)
         else:
             sql, args = super(SQLUpdateCompiler, self).as_sql()
-        e = self.connection.connection.literal
-        print (sql % tuple(e(a) for a in args))
+        # e = self.connection.connection.literal
+        # print (sql % tuple(e(a) for a in args))
 
         return sql, args
 

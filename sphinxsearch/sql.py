@@ -93,18 +93,19 @@ class SphinxQuery(Query):
     #
     # aggregates_module = sphinx_aggregates
     #
+
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('where', SphinxWhereNode)
         super(SphinxQuery, self).__init__(*args, **kwargs)
-    #
-    # def clone(self, klass=None, memo=None, **kwargs):
-    #     query = super(SphinxQuery, self).clone(klass=klass, memo=memo, **kwargs)
-    #     for attr_name in self._clonable:
-    #         value = getattr(self, attr_name, None)
-    #         if value:
-    #             setattr(query, attr_name, value)
-    #     return query
-    #
+
+    def clone(self, klass=None, memo=None, **kwargs):
+        query = super(SphinxQuery, self).clone(klass=klass, memo=memo, **kwargs)
+        for attr_name in self._clonable:
+            value = getattr(self, attr_name, None)
+            if value:
+                setattr(query, attr_name, value)
+        return query
+
     # def __str__(self):
     #     def to_str(text):
     #         if type(text) is unicode:
@@ -136,8 +137,6 @@ class SphinxQuery(Query):
         if number is None:
             number = 0
         return number
-
-
 
 
 class SphinxCol(Col):

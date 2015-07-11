@@ -197,6 +197,23 @@ class SphinxModelTestCase(TestCase):
         other = self.reload_object(self.obj)
         self.assertObjectEqualsToDefaults(other, defaults=new_values)
 
+    def testOptionsClause(self):
+        self.defaults['id'] = self.newid()
+        self.model.objects.create(**self.defaults)
+
+        qs = list(self.model.objects.options(
+            max_matches=1, ranker='bm25').all())
+        self.assertEqual(len(qs), 1)
+
+    def testLimit(self):
+        expected = [self.obj.id]
+        for i in range(10):
+            id = self.newid()
+            self.model.objects.create(id=id, attr_json={},
+                                      attr_timestamp=self.now)
+            expected.append(id)
+        qs = list(self.model.objects.all()[2:4])
+        self.assertEqual([q.id for q in qs], expected[2:4])
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

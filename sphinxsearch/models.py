@@ -137,15 +137,15 @@ class SphinxQuerySet(QuerySet):
         qs.query.where.add(ExtraWhere(where, params), AND)
         return qs
 
-    # def options(self, **kw):
-    #     """ Setup OPTION clause for query."""
-    #     qs = self._clone()
-    #     try:
-    #         qs.query.options.update(kw)
-    #     except AttributeError:
-    #         qs.query.options = kw
-    #     return qs
-    #
+    def options(self, **kw):
+        """ Setup OPTION clause for query."""
+        qs = self._clone()
+        try:
+            qs.query.options.update(kw)
+        except AttributeError:
+            qs.query.options = kw
+        return qs
+
     # def group_by(self, *args, **kw):
     #     """ Adds GROUP BY clause to query.
     #
@@ -207,22 +207,20 @@ class SphinxManager(models.Manager):
                          if isinstance(field, SphinxField)]
         return SphinxQuerySet(self.model).defer(*sphinx_fields)
 
-    get_query_set = get_queryset
-
     def options(self, **kw):
-        return self.get_query_set().options(**kw)
+        return self.get_queryset().options(**kw)
 
     def match(self, expression):
-        return self.get_query_set().match(expression)
+        return self.get_queryset().match(expression)
 
     def notequal(self, **kw):
-        return self.get_query_set().notequal(**kw)
+        return self.get_queryset().notequal(**kw)
 
     def group_by(self, *args, **kw):
-        return self.get_query_set().group_by(*args, **kw)
+        return self.get_queryset().group_by(*args, **kw)
 
     def get(self, *args, **kw):
-        return self.get_query_set().get(*args, **kw)
+        return self.get_queryset().get(*args, **kw)
 
 
 class SphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)):

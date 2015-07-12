@@ -50,9 +50,11 @@ class SphinxQuerySet(QuerySet):
         kwargs = copy(kwargs)
         for key, value in list(kwargs.items()):
             field, lookup = self.__get_field_lookup(key)
-            if self.__check_mva_field_lookup(field, lookup, value, negate):
-                kwargs.pop(key, None)
             if self.__check_search_lookup(field, lookup, value):
+                kwargs.pop(key, None)
+            elif self.__check_in_lookup(field, lookup, value, negate):
+                kwargs.pop(key, None)
+            elif self.__check_mva_field_lookup(field, lookup, value, negate):
                 kwargs.pop(key, None)
             pass
 
@@ -206,7 +208,7 @@ class SphinxQuerySet(QuerySet):
         qs.query.group_order_by = group_order_by
         return qs
 
-    def __check_mva_field_lookup(self, field, lookup, value, negated):
+    def __check_mva_field_lookup(self, field, lookup, value, negate):
         """ Replaces some MVA field lookups with valid sphinx expressions."""
 
         if not isinstance(field, (SphinxMultiField, SphinxMulti64Field)):
@@ -220,21 +222,12 @@ class SphinxQuerySet(QuerySet):
             'lte': "GREATEST(%s) <= %%s"
         }
 
-        if lookup == 'in':
-            if not isinstance(value, (tuple, list)):
-                value = [value]
-            placeholders = ', '.join(['%s'] * len(value))
-            condition = "IN(%s, %s)" % (field.column, placeholders)
-            if negated:
-                condition = "NOT (%s)" % condition
-            self.query.add_extra(None, None, [condition], value, None, None)
-            return True
-        elif lookup in transforms.keys():
+        if lookup in transforms.keys():
             tpl = transforms[lookup]
             condition = tpl % field.column
-            if negated:
+            if negate:
                 condition = "NOT (%s)" % condition
-            self.query.add_extra(None, None, [condition], value, None, None)
+            self.query.add_extra(None, None, [condition], [value], None, None)
             return True
         else:
             raise ValueError("Invalid lookup for MVA: %s" % lookup)
@@ -244,6 +237,18 @@ class SphinxQuerySet(QuerySet):
         if lookup != 'search':
             return False
         self.match(field=value)
+        return True
+
+    def __check_in_lookup(self, field, lookup, value, negate):
+        if lookup != 'in':
+            return False
+        if not isinstance(value, (tuple, list)):
+            value = [value]
+        placeholders = ', '.join(['%s'] * len(value))
+        condition = "IN(%s, %s)" % (field.column, placeholders)
+        if negate:
+            condition = "NOT (%s)" % condition
+        self.query.add_extra(None, None, [condition], value, None, None)
         return True
 
 

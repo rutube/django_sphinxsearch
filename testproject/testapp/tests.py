@@ -240,6 +240,11 @@ class SphinxModelTestCase(TestCase):
         qs = list(self.model.objects.exclude(attr_multi__in=attr_multi))
         self.assertEqual(len(qs), 0)
 
+    def testNumericIn(self):
+        attr_uint = self.defaults['attr_uint']
+        qs = list(self.model.objects.filter(attr_uint__in=[attr_uint]))
+        self.assertEqual(len(qs), 1)
+
     def testMatchClause(self):
         qs = list(self.model.objects.match("doesnotexistinindex"))
         self.assertEqual(len(qs), 0)

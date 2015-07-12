@@ -235,9 +235,13 @@ class SphinxModelTestCase(TestCase):
             attr_uint=attr_uint, attr_bool=not_bool))
         self.assertEqual(len(qs), 1)
 
-    def testExcludeMulti(self):
+    def testExcludeByList(self):
         attr_multi = self.defaults['attr_multi']
         qs = list(self.model.objects.exclude(attr_multi__in=attr_multi))
+        self.assertEqual(len(qs), 0)
+
+        attr_uint = self.defaults['attr_uint']
+        qs = list(self.model.objects.exclude(attr_uint__in=[attr_uint]))
         self.assertEqual(len(qs), 0)
 
     def testNumericIn(self):

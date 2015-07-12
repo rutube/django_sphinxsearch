@@ -13,11 +13,11 @@ class SphinxOperations(MySQLDatabaseOperations):
         return 'MATCH (\'@%s "%%s"\')' % field_name
 
 
-    # def force_no_ordering(self):
-    #     """
-    #     Fix unsupported syntax "ORDER BY NULL"
-    #     """
-    #     return []
+    def force_no_ordering(self):
+        """
+        Fix unsupported syntax "ORDER BY NULL"
+        """
+        return []
 
 
 class SphinxCreation(MySQLDatabaseCreation):

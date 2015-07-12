@@ -85,13 +85,7 @@ class SphinxQuerySet(QuerySet):
     #     # but with Sphinx, we want all related queries to flow to Sphinx,
     #     # never another configured database.
     #     return self._clone()
-    #
-    # def with_meta(self):
-    #     """ Allows to execute SHOW META immediately after main query."""
-    #     clone = self._clone()
-    #     setattr(clone.query, 'with_meta', True)
-    #     return clone
-    #
+
     # def _negate_expression(self, negate, lookup):
     #     if isinstance(lookup, (tuple, list)):
     #         result = []
@@ -177,23 +171,6 @@ class SphinxQuerySet(QuerySet):
                 qs.query.match[field].add(expression)
         return qs
 
-    def notequal(self, **kw):
-        """ Support for <> term, NOT(@id=value) doesn't work."""
-        qs = self._clone()
-        where = []
-        params = []
-        for field_name, value in kw.items():
-            field = self.model._meta.get_field(field_name)
-            if type(field) is SphinxField:
-                col = '@%s' % field.attname
-            else:
-                col = field.db_column or field.attname
-            value = field.get_prep_value(value)
-            where.append('%s <> %%s' % col)
-            params.append(value)
-        qs.query.where.add(ExtraWhere(where, params), AND)
-        return qs
-
     def options(self, **kw):
         """ Setup OPTION clause for query."""
         qs = self._clone()
@@ -203,51 +180,38 @@ class SphinxQuerySet(QuerySet):
             qs.query.options = kw
         return qs
 
-    # def group_by(self, *args, **kw):
-    #     """ Adds GROUP BY clause to query.
-    #
-    #     *args: field names or aliases to group by
-    #     keyword group_limit: (GROUP <N> BY)
-    #         int, limits number of group member to N
-    #     keyword group_order_by: (WITHIN GROUP ORDER BY)
-    #         string list, sets sort order within group
-    #         in example: group_order_by=('-my_weight', 'title')
-    #     """
-    #     group_limit = kw.get('group_limit', 0)
-    #     group_order_by = kw.get('group_order_by', ())
-    #     qs = self._clone()
-    #     qs.query.group_by = qs.query.group_by or []
-    #     for field_name in args:
-    #         if field_name not in qs.query.extra_select:
-    #             field = self.model._meta.get_field_by_name(field_name)[0]
-    #             qs.query.group_by.append(field.column)
-    #         else:
-    #             qs.query.group_by.append(field_name)
-    #     qs.query.group_limit = group_limit
-    #     qs.query.group_order_by = group_order_by
-    #     return qs
-    #
+    def group_by(self, *args, **kwargs):
+        """
+        :param args: list of fields to group by
+        :type args: list-like
 
-    # def _fetch_meta(self):
-    #     c = connections[settings.SPHINX_DATABASE_NAME].cursor()
-    #     try:
-    #         c.execute("SHOW META")
-    #         self.meta = dict([c.fetchone()])
-    #     except UnicodeDecodeError:
-    #         self.meta = {}
-    #     finally:
-    #         c.close()
-    #
-    # @immortal_generator
-    # def iterator(self):
-    #     for row in super(SphinxQuerySet, self).iterator():
-    #         yield row
-    #     if getattr(self.query, 'with_meta', False):
-    #         self._fetch_meta()
-    #
+        Keyword params:
+        :param group_limit: (GROUP <N> BY), limits number of group members to N
+        :type group_limit: int
+        :param group_order_by: (WITHIN GROUP ORDER BY), sort order within group
+        :type group_order_by: list-like
+        :return: new queryset with grouping
+        :rtype: SphinxQuerySet
+        """
+        group_limit = kwargs.get('group_limit', 0)
+        group_order_by = kwargs.get('group_order_by', ())
+        if not isinstance(group_order_by, (list, tuple)):
+            group_order_by = [group_order_by]
+        qs = self._clone()
+        qs.query.group_by = qs.query.group_by or []
+        for field_name in args:
+            if field_name not in qs.query.extra_select:
+                field = self.model._meta.get_field_by_name(field_name)[0]
+                qs.query.group_by.append(field.column)
+            else:
+                qs.query.group_by.append(field_name)
+        qs.query.group_limit = group_limit
+        qs.query.group_order_by = group_order_by
+        return qs
 
     def __check_mva_field_lookup(self, field, lookup, value):
-        """ Replaces some MVA field lookups with valid values."""
+        """ Replaces some MVA field lookups with valid sphinx expressions."""
+
         if not isinstance(field, (SphinxMultiField, SphinxMulti64Field)):
             return False
 
@@ -289,12 +253,19 @@ class SphinxManager(models.Manager):
     use_for_related_fields = True
 
     def get_queryset(self):
+        """ Creates new queryset for model.
+
+        :return: model queryset
+        :rtype: SphinxQuerySet
+        """
+
         # Determine which fields are sphinx fields (full-text data) and
         # defer loading them. Sphinx won't return them.
         # TODO: we probably need a way to keep these from being loaded
         # later if the attr is accessed.
         sphinx_fields = [field.name for field in self.model._meta.fields
                          if isinstance(field, SphinxField)]
+
         return SphinxQuerySet(self.model).defer(*sphinx_fields)
 
     def options(self, **kw):
@@ -302,9 +273,6 @@ class SphinxManager(models.Manager):
 
     def match(self, expression):
         return self.get_queryset().match(expression)
-
-    def notequal(self, **kw):
-        return self.get_queryset().notequal(**kw)
 
     def group_by(self, *args, **kw):
         return self.get_queryset().group_by(*args, **kw)

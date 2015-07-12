@@ -13,6 +13,8 @@ from django.db.models.sql import compiler, AND
 # DJANGO16 = (1, 6, 0, 'alpha', 0)
 #
 #
+from django.db.models.sql.constants import ORDER_DIR
+from django.db.models.sql.query import get_order_dir
 
 from django.utils import six
 from sphinxsearch.sql import SphinxWhereNode, SphinxExtraWhere
@@ -45,26 +47,12 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #                             column)
     #     return result
 
-    # def get_grouping(self, having_group_by=None, ordering_group_by=None, ):
-    #     # excluding from ordering_group_by items added from "extra_select"
-    #     extra = self.query.extra
-    #     self.query.extra = SortedDict()
-    #     if django.VERSION >= DJANGO16:
-    #         result, params = super(SphinxQLCompiler, self).get_grouping(
-    #             having_group_by, ordering_group_by)
-    #     elif django.VERSION >= DJANGO15:
-    #         result, params = super(SphinxQLCompiler, self).get_grouping(
-    #             ordering_group_by)
-    #     else:
-    #         result, params = super(SphinxQLCompiler, self).get_grouping()
-    #     self.query.extra = extra
-    #     # removing parentheses from group by fields
-    #     for i in range(len(result)):
-    #         g = result[i]
-    #         if g[0] == '(' and g[-1] == ')':
-    #             result[i] = g[1:-1]
-    #     return result, params
-    #
+    def get_group_by(self, select, order_by):
+        res = super(SphinxQLCompiler, self).get_group_by(select, order_by)
+        group_by = getattr(self.query, 'group_by', None)
+        if group_by:
+            return [r for r in res if r[0] in group_by]
+        return res
 
     def _serialize(self, values_list):
         if isinstance(values_list, six.string_types):
@@ -122,19 +110,19 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         # replacing it with LIMIT <offset>, <limit>
         sql = re.sub(r'LIMIT ([\d]+) OFFSET ([\d]+)$', 'LIMIT \\2, \\1', sql)
 
-    #     # patching GROUP BY clause
-    #     group_limit = getattr(self.query, 'group_limit', '')
-    #     group_by_ordering = self.get_group_ordering()
-    #     if group_limit:
-    #         # add GROUP <N> BY expression
-    #         group_by = 'GROUP %s BY \\1' % group_limit
-    #     else:
-    #         group_by = 'GROUP BY \\1'
-    #     if group_by_ordering:
-    #         # add WITHIN GROUP ORDER BY expression
-    #         group_by += group_by_ordering
-    #     sql = re.sub(r'GROUP BY (([\w\d_]+)(, [\w\d_]+)*)', group_by, sql)
-    #
+        # patching GROUP BY clause
+        group_limit = getattr(self.query, 'group_limit', '')
+        group_by_ordering = self.get_group_ordering()
+        if group_limit:
+            # add GROUP <N> BY expression
+            group_by = 'GROUP %s BY \\1' % group_limit
+        else:
+            group_by = 'GROUP BY \\1'
+        if group_by_ordering:
+            # add WITHIN GROUP ORDER BY expression
+            group_by += group_by_ordering
+        sql = re.sub(r'GROUP BY (([\w\d_]+)(, [\w\d_]+)*)', group_by, sql)
+
         # adding sphinx OPTION clause
         # TODO: syntax check for option values is not performed
         options = getattr(self.query, 'options', None)
@@ -150,16 +138,16 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         print (sql % tuple(e(a) for a in args))
         return sql, args
 
-    # def get_group_ordering(self):
-    #     group_order_by = getattr(self.query, 'group_order_by', ())
-    #     asc, desc = ORDER_DIR['ASC']
-    #     if not group_order_by:
-    #         return ''
-    #     result = []
-    #     for order_by in group_order_by:
-    #         col, order = get_order_dir(order_by, asc)
-    #         result.append("%s %s" % (col, order))
-    #     return " WITHIN GROUP ORDER BY " + ", ".join(result)
+    def get_group_ordering(self):
+        group_order_by = getattr(self.query, 'group_order_by', ())
+        asc, desc = ORDER_DIR['ASC']
+        if not group_order_by:
+            return ''
+        result = []
+        for order_by in group_order_by:
+            col, order = get_order_dir(order_by, asc)
+            result.append("%s %s" % (col, order))
+        return " WITHIN GROUP ORDER BY " + ", ".join(result)
 
     def _add_match_extra(self, match):
         expression = []

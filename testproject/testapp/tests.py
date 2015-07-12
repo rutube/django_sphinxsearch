@@ -246,6 +246,23 @@ class SphinxModelTestCase(TestCase):
         qs = list(self.model.objects.order_by('-attr_uint'))
         expected = [self.obj.id] + list(reversed(expected[1:]))
         self.assertEqual([q.id for q in qs], expected)
+        list(self.model.objects.order_by())
+
+    def testGroupBy(self):
+        m1 = self.model.objects.create(id=self.newid(),
+                                       attr_uint=10, attr_float=1)
+        m2 = self.model.objects.create(id=self.newid(),
+                                       attr_uint=10, attr_float=2)
+        m3 = self.model.objects.create(id=self.newid(),
+                                       attr_uint=20, attr_float=2)
+        m4 = self.model.objects.create(id=self.newid(),
+                                       attr_uint=10, attr_float=1)
+
+        qs = self.model.objects.defer('attr_json', 'attr_multi', 'attr_multi_64')
+        qs = list(qs.group_by('attr_uint',
+                              group_limit=1,
+                              group_order_by='-attr_float'))
+        self.assertSetEqual({o.id for o in qs}, {self.obj.id, m2.id, m3.id})
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from unittest import skip
 from django.conf import settings
 from django.db import connections
+from django.db.models import Sum
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 import sys
@@ -263,6 +264,17 @@ class SphinxModelTestCase(TestCase):
                               group_limit=1,
                               group_order_by='-attr_float'))
         self.assertSetEqual({o.id for o in qs}, {self.obj.id, m2.id, m3.id})
+
+    def testAggregation(self):
+        s = self.model.objects.aggregate(Sum('attr_uint'))
+        self.assertEqual(s['attr_uint__sum'], self.defaults['attr_uint'])
+
+    def testCastToChar(self):
+        self.obj.attr_string = 100500
+        self.obj.save()
+        self.defaults['attr_string'] = '100500'
+        other = self.model.objects.get(attr_string=100500)
+        self.assertObjectEqualsToDefaults(other)
 
     def tearDown(self):
         self.spx_queries.__exit__(*sys.exc_info())

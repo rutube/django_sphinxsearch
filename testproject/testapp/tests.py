@@ -96,7 +96,7 @@ class SphinxModelTestCase(TestCase):
             if key in exclude:
                 continue
             value = getattr(self.obj, key)
-            count = self.model.objects.notequal(**{key: value}).count()
+            count = self.model.objects.exclude(**{key: value}).count()
             self.assertEqual(count, 0)
 
     def testNumericAttrLookups(self):
@@ -161,7 +161,6 @@ class SphinxModelTestCase(TestCase):
         other = self.model.objects.filter(sphinx_field__search="hello")[0]
         self.assertEqual(other.id, self.obj.id)
 
-    @skip("FIXME")
     def testDjangoSearchMultiple(self):
         list(self.model.objects.filter(sphinx_field__search="@sdfsff 'sdfdf'",
                                        other_field__search="sdf"))
@@ -220,6 +219,27 @@ class SphinxModelTestCase(TestCase):
                                       attr_timestamp=self.now)
             expected.append(id)
         return expected
+
+    def testExclude(self):
+        attr_uint = self.defaults['attr_uint']
+        attr_bool = self.defaults['attr_bool']
+        not_bool = not attr_bool
+
+        # check exclude works
+        qs = list(self.model.objects.exclude(
+            attr_uint=attr_uint, attr_bool=attr_bool))
+        self.assertEqual(len(qs), 0)
+        # check that it's really NOT (a AND b) as in Django documentation
+        qs = list(self.model.objects.exclude(
+            attr_uint=attr_uint, attr_bool=not_bool))
+        self.assertEqual(len(qs), 1)
+
+    def testMatchClause(self):
+        qs = list(self.model.objects.match("doesnotexistinindex"))
+        self.assertEqual(len(qs), 0)
+        qs = list(self.model.objects.match("hello"))
+        self.assertEqual(len(qs), 1)
+        qs = list(self.model.objects.match("hello").match("world"))
 
     def testOrderBy(self):
         expected = self.create_multiple_models()

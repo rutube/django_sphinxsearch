@@ -2,9 +2,10 @@
 import re
 from django.core.exceptions import FieldError
 from django.db import models
+from django.db.models import Q
 from django.db.models.lookups import Search, Exact
 
-from django.db.models.sql import compiler
+from django.db.models.sql import compiler, AND
 
 # from django.db.models.sql.expressions import SQLEvaluator
 #
@@ -12,13 +13,9 @@ from django.db.models.sql import compiler
 # DJANGO16 = (1, 6, 0, 'alpha', 0)
 #
 #
-# class SphinxExtraWhere(ExtraWhere):
-#
-#     def as_sql(self, qn=None, connection=None):
-#         sqls = ["%s" % sql for sql in self.sqls]
-#         return " AND ".join(sqls), tuple(self.params or ())
-#
-#
+
+from django.utils import six
+from sphinxsearch.sql import SphinxWhereNode, SphinxExtraWhere
 from sphinxsearch.utils import sphinx_escape
 
 
@@ -68,62 +65,54 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #             result[i] = g[1:-1]
     #     return result, params
     #
-    # def _serialize(self, values_list):
-    #     if isinstance(values_list, six.string_types):
-    #         return values_list
-    #     ensure_list = lambda s:  [s] if isinstance(s, six.string_types) else s
-    #     values_list = [item for s in values_list for item in ensure_list(s)]
-    #     positive_list = filter(lambda s: not s.startswith('-'), values_list)
-    #     negative_list = filter(lambda s: s.startswith('-'), values_list)
-    #     def quote(s, negative=True):
-    #         prefix = '-' if negative else ''
-    #         if s.startswith('"'):
-    #             return s
-    #         negative = s.startswith('-')
-    #         if not negative:
-    #             return '"%s"' % s
-    #         s = s[1:]
-    #         if s.startswith('"'):
-    #             return '%s%s' % (prefix, s)
-    #         return '%s"%s"' % (prefix, s)
-    #
-    #     positive = "|".join(map(quote, positive_list))
-    #     if not positive_list:
-    #         negative = '|'.join(quote(n, negative=False) for n in negative_list)
-    #         template = '%s -(%s)'
-    #     else:
-    #         negative = ' '.join(map(quote, negative_list))
-    #         template = '%s %s'
-    #     result = template % (positive.strip(' '), negative.strip(' '))
-    #     return result.strip(' ')
-    #
+
+    def _serialize(self, values_list):
+        if isinstance(values_list, six.string_types):
+            return values_list
+        ensure_list = lambda s:  [s] if isinstance(s, six.string_types) else s
+        values_list = [item for s in values_list for item in ensure_list(s)]
+        positive_list = filter(lambda s: not s.startswith('-'), values_list)
+        negative_list = filter(lambda s: s.startswith('-'), values_list)
+        def quote(s, negative=True):
+            prefix = '-' if negative else ''
+            if s.startswith('"'):
+                return s
+            negative = s.startswith('-')
+            if not negative:
+                return '"%s"' % s
+            s = s[1:]
+            if s.startswith('"'):
+                return '%s%s' % (prefix, s)
+            return '%s"%s"' % (prefix, s)
+
+        positive = "|".join(map(quote, positive_list))
+        if not positive_list:
+            negative = '|'.join(quote(n, negative=False) for n in negative_list)
+            template = '%s -(%s)'
+        else:
+            negative = ' '.join(map(quote, negative_list))
+            template = '%s %s'
+        result = template % (positive.strip(' '), negative.strip(' '))
+        return result.strip(' ')
+
     def as_sql(self, with_limits=True, with_col_aliases=False):
         """ Patching final SQL query."""
-    #     match = getattr(self.query, 'match', None)
-    #     if match:
-    #         expression = []
-    #         all_field_expr = []
-    #         all_fields_lookup = match.get('*')
-    #         if all_fields_lookup:
-    #             if isinstance(all_fields_lookup, six.string_types):
-    #                 expression.append(all_fields_lookup)
-    #                 all_field_expr.append(all_fields_lookup)
-    #             else:
-    #                 for value in all_fields_lookup:
-    #                     value_str = self._serialize(value)
-    #                     expression.append(value_str)
-    #                     all_field_expr.append(value_str)
-    #         for sphinx_attr, lookup in match.items():
-    #             if sphinx_attr == '*':
-    #                 continue
-    #             field = self.query.model._meta.get_field(sphinx_attr)
-    #             db_column = field.db_column or field.attname
-    #             expression.append('@' + db_column)
-    #             expression.append("(%s)" % self._serialize(lookup))
-    #         decode = lambda _: _.decode("utf-8") if type(_) is six.binary_type else _
-    #         match_expr = u"MATCH('%s')" % u' '.join(map(decode, expression))
-    #         self.query.where.add(SphinxExtraWhere([match_expr], []), AND)
-    #     self.query.match = dict()
+        self.query = self.query.clone()
+        where, self.query.where = self.query.where, SphinxWhereNode()
+        match = getattr(self.query, 'match', None)
+        if match:
+            self._add_match_extra(match)
+        self.query.match = dict()
+
+        qn = self.quote_name_unless_alias
+        connection = self.connection
+
+        where_sql, where_params = where.as_sql(self, connection)
+        if where_sql:
+            self.query.add_extra(
+                {'__where_result': where_sql}, where_params,
+                ['__where_result = %s'], (True,), None, None)
+
 
         sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
                                                          with_col_aliases)
@@ -157,8 +146,8 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #     sql = re.sub(r'(%[^s])', '%%\1', sql)
     #     if isinstance(sql, six.binary_type):
     #         sql = sql.decode("utf-8")
-    #     e = self.connection.connection.literal
-    #     print (sql % tuple(e(a) for a in args))
+        e = self.connection.connection.literal
+        print (sql % tuple(e(a) for a in args))
         return sql, args
 
     # def get_group_ordering(self):
@@ -171,6 +160,32 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #         col, order = get_order_dir(order_by, asc)
     #         result.append("%s %s" % (col, order))
     #     return " WITHIN GROUP ORDER BY " + ", ".join(result)
+
+    def _add_match_extra(self, match):
+        expression = []
+        all_field_expr = []
+        all_fields_lookup = match.get('*')
+        if all_fields_lookup:
+            if isinstance(all_fields_lookup, six.string_types):
+                expression.append(all_fields_lookup)
+                all_field_expr.append(all_fields_lookup)
+            else:
+                for value in all_fields_lookup:
+                    value_str = self._serialize(value)
+                    expression.append(value_str)
+                    all_field_expr.append(value_str)
+        for sphinx_attr, lookup in match.items():
+            if sphinx_attr == '*':
+                continue
+            field = self.query.model._meta.get_field(sphinx_attr)
+            db_column = field.db_column or field.attname
+            expression.append('@' + db_column)
+            expression.append("(%s)" % self._serialize(lookup))
+        decode = lambda _: _.decode("utf-8") if type(
+            _) is six.binary_type else _
+        match_expr = u"MATCH('%s')" % u' '.join(map(decode, expression))
+        self.query.where.add(SphinxExtraWhere([match_expr], []), AND)
+
 
 # Set SQLCompiler appropriately, so queries will use the correct compiler.
 SQLCompiler = SphinxQLCompiler

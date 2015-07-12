@@ -1,9 +1,12 @@
 # coding: utf-8
+from collections import OrderedDict
+from copy import copy
 
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Q, F
 from django.db.models.sql import AND
 from django.db.models.sql.where import ExtraWhere
 from django.utils import six
+from django.utils.datastructures import OrderedSet
 
 from sphinxsearch.fields import *
 from sphinxsearch import sql
@@ -14,9 +17,64 @@ class SphinxQuerySet(QuerySet):
         kwargs.setdefault('query', sql.SphinxQuery(model))
         super(SphinxQuerySet, self).__init__(model, **kwargs)
 
-    def exclude(self, *args, **kwargs):
-        raise NotImplementedError(
-            "sphinxsearch doens't support negated filters")
+    def exclude1(self, *args, **kwargs):
+        """
+        Returns a new QuerySet instance with NOT (args) ANDed to the existing
+        set.
+
+
+        """
+        if args:
+            raise ValueError("Q objects in exclude not supported")
+
+        negating = {
+            'gte': 'lt',
+            'gt': 'lte',
+            'lt': 'gte',
+            'lte': 'gt',
+            'exact': 'notequal',
+        }
+        filter_kwargs = {}
+        for k, v in kwargs.items():
+            try:
+                field, lookup = k.rsplit('__', 1)
+                negated = negating[lookup]
+            except ValueError:
+                field = k
+                negated = 'notequal'
+            except KeyError:
+                raise NotImplementedError(
+                    "sphinxsearch doesn't support negated filters")
+            filter_kwargs['%s__%s' % (field, negated)] = v
+        return self.filter(**filter_kwargs)
+
+    def _filter_or_exclude(self, negate, *args, **kwargs):
+        args = list(args)
+        kwargs = copy(kwargs)
+        for key, value in list(kwargs.items()):
+            field, lookup = self.__get_field_lookup(key)
+            if self.__check_mva_field_lookup(field, lookup, value):
+                kwargs.pop(key, None)
+            if self.__check_search_lookup(field, lookup, value):
+                kwargs.pop(key, None)
+            pass
+
+        return super(SphinxQuerySet, self)._filter_or_exclude(negate, *args,
+                                                              **kwargs)
+
+    def __get_field_lookup(self, key):
+        tokens = key.split('__')
+        if len(tokens) == 1:
+            field_name, lookup = tokens[0], 'exact'
+        elif len(tokens) == 2:
+            field_name, lookup = tokens
+        else:
+            raise ValueError("Nested field lookup found")
+        if field_name == 'pk':
+            field = self.model._meta.pk
+        else:
+            field = self.model._meta.get_field(field_name)
+        return field, lookup
 
     #
     # def using(self, alias):
@@ -91,34 +149,33 @@ class SphinxQuerySet(QuerySet):
     # def get(self, *args, **kwargs):
     #     return super(SphinxQuerySet, self).get(*args, **kwargs)
     #
-    # def match(self, *args, **kwargs):
-    #     """ Enables full-text searching in sphinx (MATCH expression).
-    #
-    #     qs.match('sphinx_expression_1', 'sphinx_expression_2')
-    #         compiles to
-    #     MATCH('sphinx_expression_1 sphinx_expression_2)
-    #
-    #     qs.match(field1='sphinx_loopup1',field2='sphinx_loopup2')
-    #         compiles to
-    #     MATCH('@field1 sphinx_lookup1 @field2 sphinx_lookup2')
-    #     """
-    #     qs = self._clone()
-    #     if not hasattr(qs.query, 'match'):
-    #         qs.query.match = dict()
-    #     for expression in args:
-    #         qs.query.match.setdefault('*', set())
-    #         if isinstance(expression, (list, tuple)):
-    #             qs.query.match['*'].update(expression)
-    #         else:
-    #             qs.query.match['*'].add(expression)
-    #     for field, expression in kwargs.items():
-    #         qs.query.match.setdefault(field, set())
-    #         if isinstance(expression, (list, tuple, set)):
-    #             qs.query.match[field].update(expression)
-    #         else:
-    #             qs.query.match[field].add(expression)
-    #     return qs
-    #
+    def match(self, *args, **kwargs):
+        """ Enables full-text searching in sphinx (MATCH expression).
+
+        qs.match('sphinx_expression_1', 'sphinx_expression_2')
+            compiles to
+        MATCH('sphinx_expression_1 sphinx_expression_2)
+
+        qs.match(field1='sphinx_loopup1',field2='sphinx_loopup2')
+            compiles to
+        MATCH('@field1 sphinx_lookup1 @field2 sphinx_lookup2')
+        """
+        qs = self._clone()
+        if not hasattr(qs.query, 'match'):
+            qs.query.match = OrderedDict()
+        for expression in args:
+            qs.query.match.setdefault('*', OrderedSet())
+            if isinstance(expression, (list, tuple)):
+                qs.query.match['*'].update(expression)
+            else:
+                qs.query.match['*'].add(expression)
+        for field, expression in kwargs.items():
+            qs.query.match.setdefault(field, OrderedSet())
+            if isinstance(expression, (list, tuple, set)):
+                qs.query.match[field].update(expression)
+            else:
+                qs.query.match[field].add(expression)
+        return qs
 
     def notequal(self, **kw):
         """ Support for <> term, NOT(@id=value) doesn't work."""
@@ -170,12 +227,7 @@ class SphinxQuerySet(QuerySet):
     #     qs.query.group_order_by = group_order_by
     #     return qs
     #
-    # def _clone(self, klass=None, setup=False, **kwargs):
-    #     """ Add support of cloning self.query.options."""
-    #     result = super(SphinxQuerySet, self)._clone(klass, setup, **kwargs)
-    #
-    #     return result
-    #
+
     # def _fetch_meta(self):
     #     c = connections[settings.SPHINX_DATABASE_NAME].cursor()
     #     try:
@@ -193,6 +245,44 @@ class SphinxQuerySet(QuerySet):
     #     if getattr(self.query, 'with_meta', False):
     #         self._fetch_meta()
     #
+
+    def __check_mva_field_lookup(self, field, lookup, value):
+        """ Replaces some MVA field lookups with valid values."""
+        if not isinstance(field, (SphinxMultiField, SphinxMulti64Field)):
+            return False
+
+        transforms = {
+            'exact': "IN(%s, %%s)",
+            'gte': "LEAST(%s) >= %%s",
+            'ge': "LEAST(%s) > %%s",
+            'lt': "GREATEST(%s) < %%s",
+            'lte': "GREATEST(%s) <= %%s"
+        }
+
+        if lookup == 'in':
+            if not isinstance(value, (tuple, list)):
+                value = [value]
+            placeholders = ', '.join(['%s'] * len(value))
+            self.query.add_extra(None, None,
+                                 ["IN(%s, %s)" % (field.column, placeholders)],
+                                 value, None, None)
+            return True
+        elif lookup in transforms.keys():
+            tpl = transforms[lookup]
+            self.query.add_extra(None, None,
+                                 [tpl % field.column], (value,),
+                                 None, None)
+            return True
+        else:
+            raise ValueError("Invalid lookup for MVA: %s" % lookup)
+
+    def __check_search_lookup(self, field, lookup, value):
+        """ Replaces field__search lookup with MATCH() call."""
+        if lookup != 'search':
+            return False
+        self.match(field=value)
+        return True
+
 
 
 class SphinxManager(models.Manager):

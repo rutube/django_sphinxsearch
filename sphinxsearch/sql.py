@@ -1,6 +1,7 @@
 # coding: utf-8
 
 # $Id: $
+from collections import OrderedDict
 import functools
 from django.db import models
 from django.db.models import Count
@@ -8,6 +9,7 @@ from django.db.models.base import ModelBase
 from django.db.models.expressions import Col
 from django.db.models.sql import Query
 from django.db.models.sql.where import WhereNode, ExtraWhere
+from django.utils.datastructures import OrderedSet
 
 
 class SphinxCount(Count):
@@ -112,6 +114,23 @@ class SphinxQuery(Query):
             if value:
                 setattr(query, attr_name, value)
         return query
+
+    def add_match(self, *args, **kwargs):
+        if not hasattr(self, 'match'):
+            self.match = OrderedDict()
+        for expression in args:
+            self.match.setdefault('*', OrderedSet())
+            if isinstance(expression, (list, tuple)):
+                self.match['*'].update(expression)
+            else:
+                self.match['*'].add(expression)
+        for field, expression in kwargs.items():
+            self.match.setdefault(field, OrderedSet())
+            if isinstance(expression, (list, tuple, set)):
+                self.match[field].update(expression)
+            else:
+                self.match[field].add(expression)
+
 
     # def __str__(self):
     #     def to_str(text):

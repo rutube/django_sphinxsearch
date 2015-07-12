@@ -62,6 +62,7 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         values_list = [item for s in values_list for item in ensure_list(s)]
         positive_list = filter(lambda s: not s.startswith('-'), values_list)
         negative_list = filter(lambda s: s.startswith('-'), values_list)
+
         def quote(s, negative=True):
             prefix = '-' if negative else ''
             if s.startswith('"'):

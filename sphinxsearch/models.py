@@ -7,6 +7,7 @@ from django.utils.datastructures import OrderedSet
 
 from sphinxsearch.fields import *
 from sphinxsearch import sql
+from sphinxsearch.utils import sphinx_escape
 
 
 class SphinxQuerySet(QuerySet):
@@ -54,6 +55,8 @@ class SphinxQuerySet(QuerySet):
                 kwargs.pop(key, None)
             elif self.__check_in_lookup(field, lookup, value, negate):
                 kwargs.pop(key, None)
+            elif self.__check_sphinx_field_exact(field, lookup, value, negate):
+                kwargs.pop(key, None)
             elif self.__check_mva_field_lookup(field, lookup, value, negate):
                 kwargs.pop(key, None)
             pass
@@ -85,22 +88,22 @@ class SphinxQuerySet(QuerySet):
     #     # never another configured database.
     #     return self._clone()
 
-    # def _negate_expression(self, negate, lookup):
-    #     if isinstance(lookup, (tuple, list)):
-    #         result = []
-    #         for v in lookup:
-    #             result.append(self._negate_expression(negate, v))
-    #         return result
-    #     else:
-    #         if not isinstance(lookup, six.string_types):
-    #             lookup = six.text_type(lookup)
-    #
-    #         if not lookup.startswith('"'):
-    #             lookup = '"%s"' % lookup
-    #         if negate:
-    #             lookup = '-%s' % lookup
-    #         return lookup
-    #
+    def _negate_expression(self, negate, lookup):
+        if isinstance(lookup, (tuple, list)):
+            result = []
+            for v in lookup:
+                result.append(self._negate_expression(negate, v))
+            return result
+        else:
+            if not isinstance(lookup, six.string_types):
+                lookup = six.text_type(lookup)
+
+            if not lookup.startswith('"'):
+                lookup = '"%s"' % lookup
+            if negate:
+                lookup = '-%s' % lookup
+            return lookup
+
     #
     # def _filter_or_exclude(self, negate, *args, **kwargs):
     #     """ String attributes can't be compared with = term, so they are
@@ -154,20 +157,7 @@ class SphinxQuerySet(QuerySet):
         MATCH('@field1 sphinx_lookup1 @field2 sphinx_lookup2')
         """
         qs = self._clone()
-        if not hasattr(qs.query, 'match'):
-            qs.query.match = OrderedDict()
-        for expression in args:
-            qs.query.match.setdefault('*', OrderedSet())
-            if isinstance(expression, (list, tuple)):
-                qs.query.match['*'].update(expression)
-            else:
-                qs.query.match['*'].add(expression)
-        for field, expression in kwargs.items():
-            qs.query.match.setdefault(field, OrderedSet())
-            if isinstance(expression, (list, tuple, set)):
-                qs.query.match[field].update(expression)
-            else:
-                qs.query.match[field].add(expression)
+        qs.query.add_match(*args, **kwargs)
         return qs
 
     def options(self, **kw):
@@ -236,7 +226,7 @@ class SphinxQuerySet(QuerySet):
         """ Replaces field__search lookup with MATCH() call."""
         if lookup != 'search':
             return False
-        self.match(field=value)
+        self.query.add_match(field=value)
         return True
 
     def __check_in_lookup(self, field, lookup, value, negate):
@@ -251,7 +241,15 @@ class SphinxQuerySet(QuerySet):
         self.query.add_extra(None, None, [condition], value, None, None)
         return True
 
-
+    def __check_sphinx_field_exact(self, field, lookup, value, negate):
+        if not isinstance(field, SphinxField):
+            return False
+        if lookup != 'exact':
+            raise ValueError("Unsupported lookup for SphinxField")
+        if negate:
+            value = '-%s' % value
+        self.query.add_match(**{field.column: value})
+        return True
 
 class SphinxManager(models.Manager):
     use_for_related_fields = True

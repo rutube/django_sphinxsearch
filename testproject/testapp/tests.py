@@ -283,6 +283,16 @@ class SphinxModelTestCase(TestCase):
         s = self.model.objects.aggregate(Sum('attr_uint'))
         self.assertEqual(s['attr_uint__sum'], self.defaults['attr_uint'])
 
+    def testSphinxFieldExact(self):
+        sphinx_field = self.defaults['sphinx_field']
+        other = self.model.objects.get(sphinx_field=sphinx_field)
+        self.assertObjectEqualsToDefaults(other)
+
+    def testSphinxFieldExactExclude(self):
+        sphinx_field = self.defaults['sphinx_field']
+        qs = list(self.model.objects.match('hello').exclude(sphinx_field=sphinx_field))
+        self.assertEqual(len(qs), 0)
+
     def testCastToChar(self):
         self.obj.attr_string = 100500
         self.obj.save()

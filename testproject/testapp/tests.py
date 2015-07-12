@@ -235,6 +235,11 @@ class SphinxModelTestCase(TestCase):
             attr_uint=attr_uint, attr_bool=not_bool))
         self.assertEqual(len(qs), 1)
 
+    def testExcludeMulti(self):
+        attr_multi = self.defaults['attr_multi']
+        qs = list(self.model.objects.exclude(attr_multi__in=attr_multi))
+        self.assertEqual(len(qs), 0)
+
     def testMatchClause(self):
         qs = list(self.model.objects.match("doesnotexistinindex"))
         self.assertEqual(len(qs), 0)

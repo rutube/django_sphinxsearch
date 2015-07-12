@@ -1,11 +1,12 @@
 # coding: utf-8
+from collections import OrderedDict
 import re
+
 from django.core.exceptions import FieldError
 from django.db import models
-from django.db.models import Q
 from django.db.models.lookups import Search, Exact
-
 from django.db.models.sql import compiler, AND
+
 
 # from django.db.models.sql.expressions import SQLEvaluator
 #
@@ -90,9 +91,8 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         match = getattr(self.query, 'match', None)
         if match:
             self._add_match_extra(match)
-        self.query.match = dict()
+        self.query.match = OrderedDict()
 
-        qn = self.quote_name_unless_alias
         connection = self.connection
 
         where_sql, where_params = where.as_sql(self, connection)

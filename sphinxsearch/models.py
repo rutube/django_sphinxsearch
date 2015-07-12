@@ -2,10 +2,7 @@
 from collections import OrderedDict
 from copy import copy
 
-from django.db.models import QuerySet, Q, F
-from django.db.models.sql import AND
-from django.db.models.sql.where import ExtraWhere
-from django.utils import six
+from django.db.models import QuerySet
 from django.utils.datastructures import OrderedSet
 
 from sphinxsearch.fields import *
@@ -53,7 +50,7 @@ class SphinxQuerySet(QuerySet):
         kwargs = copy(kwargs)
         for key, value in list(kwargs.items()):
             field, lookup = self.__get_field_lookup(key)
-            if self.__check_mva_field_lookup(field, lookup, value):
+            if self.__check_mva_field_lookup(field, lookup, value, negate):
                 kwargs.pop(key, None)
             if self.__check_search_lookup(field, lookup, value):
                 kwargs.pop(key, None)
@@ -209,7 +206,7 @@ class SphinxQuerySet(QuerySet):
         qs.query.group_order_by = group_order_by
         return qs
 
-    def __check_mva_field_lookup(self, field, lookup, value):
+    def __check_mva_field_lookup(self, field, lookup, value, negated):
         """ Replaces some MVA field lookups with valid sphinx expressions."""
 
         if not isinstance(field, (SphinxMultiField, SphinxMulti64Field)):
@@ -227,15 +224,17 @@ class SphinxQuerySet(QuerySet):
             if not isinstance(value, (tuple, list)):
                 value = [value]
             placeholders = ', '.join(['%s'] * len(value))
-            self.query.add_extra(None, None,
-                                 ["IN(%s, %s)" % (field.column, placeholders)],
-                                 value, None, None)
+            condition = "IN(%s, %s)" % (field.column, placeholders)
+            if negated:
+                condition = "NOT (%s)" % condition
+            self.query.add_extra(None, None, [condition], value, None, None)
             return True
         elif lookup in transforms.keys():
             tpl = transforms[lookup]
-            self.query.add_extra(None, None,
-                                 [tpl % field.column], (value,),
-                                 None, None)
+            condition = tpl % field.column
+            if negated:
+                condition = "NOT (%s)" % condition
+            self.query.add_extra(None, None, [condition], value, None, None)
             return True
         else:
             raise ValueError("Invalid lookup for MVA: %s" % lookup)

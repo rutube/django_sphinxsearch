@@ -8,5 +8,5 @@ setup(
     license='Beer License',
     author='tumbler',
     author_email='zimbler@gmail.com',
-    description='Sphinxsearch database backend for django'
+    description='Sphinxsearch database backend for django',
 )

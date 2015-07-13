@@ -24,6 +24,8 @@ class SphinxModelTestCase(TestCase):
         c.execute("TRUNCATE RTINDEX %s" % self.model._meta.db_table)
 
     def setUp(self):
+        c = connections[settings.SPHINX_DATABASE_NAME]
+        self.no_string_compare = c.mysql_version < (2, 2, 7)
         self.model = TestModel
         self.truncate_model()
         self.now = datetime.now().replace(microsecond=0)
@@ -68,6 +70,8 @@ class SphinxModelTestCase(TestCase):
 
     def testSelectByAttrs(self):
         exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field']
+        if self.no_string_compare:
+            exclude.extend(['attr_string', 'attr_json'])
         for key in self.defaults.keys():
             if key in exclude:
                 continue
@@ -91,8 +95,9 @@ class SphinxModelTestCase(TestCase):
 
     def testExcludeByAttrs(self):
         exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field',
-                   'attr_float'
-                   ]
+                   'attr_float']
+        if self.no_string_compare:
+            exclude.extend(['attr_string'])
         for key in self.defaults.keys():
             if key in exclude:
                 continue
@@ -168,6 +173,8 @@ class SphinxModelTestCase(TestCase):
 
     def testAdminSupportIssues(self):
         exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field']
+        if self.no_string_compare:
+            exclude.extend(['attr_string', 'attr_json'])
         for key in self.defaults.keys():
             if key in exclude:
                 continue
@@ -294,6 +301,8 @@ class SphinxModelTestCase(TestCase):
         self.assertEqual(len(qs), 0)
 
     def testCastToChar(self):
+        if self.no_string_compare:
+            self.skipTest("string compare not supported by server")
         self.obj.attr_string = 100500
         self.obj.save()
         self.defaults['attr_string'] = '100500'

@@ -15,37 +15,6 @@ class SphinxQuerySet(QuerySet):
         kwargs.setdefault('query', sql.SphinxQuery(model))
         super(SphinxQuerySet, self).__init__(model, **kwargs)
 
-    def exclude1(self, *args, **kwargs):
-        """
-        Returns a new QuerySet instance with NOT (args) ANDed to the existing
-        set.
-
-
-        """
-        if args:
-            raise ValueError("Q objects in exclude not supported")
-
-        negating = {
-            'gte': 'lt',
-            'gt': 'lte',
-            'lt': 'gte',
-            'lte': 'gt',
-            'exact': 'notequal',
-        }
-        filter_kwargs = {}
-        for k, v in kwargs.items():
-            try:
-                field, lookup = k.rsplit('__', 1)
-                negated = negating[lookup]
-            except ValueError:
-                field = k
-                negated = 'notequal'
-            except KeyError:
-                raise NotImplementedError(
-                    "sphinxsearch doesn't support negated filters")
-            filter_kwargs['%s__%s' % (field, negated)] = v
-        return self.filter(**filter_kwargs)
-
     def _filter_or_exclude(self, negate, *args, **kwargs):
         args = list(args)
         kwargs = copy(kwargs)
@@ -226,7 +195,7 @@ class SphinxQuerySet(QuerySet):
         """ Replaces field__search lookup with MATCH() call."""
         if lookup != 'search':
             return False
-        self.query.add_match(field=value)
+        self.query.add_match(**{field.name: sphinx_escape(value)})
         return True
 
     def __check_in_lookup(self, field, lookup, value, negate):

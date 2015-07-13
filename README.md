@@ -13,12 +13,11 @@ Installation and usage
 ----------------------
 
 1. Install django-sphinxsearch package
-```sh
+    ```sh
 pip install https://github.com/tumb1er/django_sphinxsearch/archive/master.zip
 ```
-
 2. Configure Django settings
-```python
+    ```python
 
 INSTALLED_APPS += (
     'sphinxsearch',
@@ -35,9 +34,8 @@ DATABASES[SPHINX_DATABASE_NAME] = {
 DATABASE_ROUTERS = ['sphinxsearch.routers.SphinxRouter']
 
 ```
-
 3. Create index definitions in sphinx.conf
-```
+    ```
 index testapp_testmodel
 {
 	type			= rt
@@ -55,9 +53,8 @@ index testapp_testmodel
     rt_attr_json      = attr_json
 }
 ```
-
 4. Define Django model for index
-```python
+    ```python
 
 from datetime import datetime
 from django.db import models
@@ -89,10 +86,8 @@ class TestModel(spx_models.SphinxModel):
     attr_multi_64 = spx_models.SphinxMulti64Field(default=[])
     
 ```
-
 5. Query index from your app
-
-```python
+    ```python
 
 # Numeric attributes filtering
 TestModel.objects.filter(attr_uint=0, attr_float__gte=10, attr_multi__in=[1, 2])

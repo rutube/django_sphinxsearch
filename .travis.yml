@@ -15,6 +15,6 @@ install:
 # command to run tests
 script:
     - searchd -c `pwd`/test_config/sphinx.conf
-    - python ./manage.py test
+    - python ./manage.py test -v3
 
 after-script: kill `cat /tmp/searchd.pid`

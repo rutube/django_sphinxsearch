@@ -9,10 +9,6 @@ env:
 
 # command to install dependencies
 install:
-  - apt-get install --unly-upgrade sysv-rc
-  - apt-get install file-rc
-  - wget http://sphinxsearch.com/files/sphinxsearch_2.3.1-beta-0ubuntu12~trusty_amd64.deb -qO /tmp/sphinxsearch-beta.deb
-  - sudo dpkg -i /tmp/sphinxsearch-beta.deb
   - pip install Django==$DJANGO
   - pip install -r test-requires.txt
 

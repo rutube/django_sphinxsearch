@@ -12,9 +12,9 @@ class SphinxRouter(object):
     """
 
     def is_sphinx_model(self, model_or_obj):
-        from django.db.models.base import ModelBase
         from sphinxsearch.models import SphinxModel
-        if type(model_or_obj) is not ModelBase:
+        from sphinxsearch.sql import SphinxModelBase
+        if type(model_or_obj) is not SphinxModelBase:
             model = model_or_obj.__class__
         else:
             model = model_or_obj

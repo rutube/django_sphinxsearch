@@ -1,9 +1,7 @@
 # coding: utf-8
-from collections import OrderedDict
 from copy import copy
 
 from django.db.models import QuerySet
-from django.utils.datastructures import OrderedSet
 
 from sphinxsearch.fields import *
 from sphinxsearch import sql

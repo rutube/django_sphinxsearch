@@ -102,7 +102,6 @@ class SphinxQLCompiler(compiler.SQLCompiler):
                 {'__where_result': where_sql}, where_params,
                 ['__where_result = %s'], (True,), None, None)
 
-
         sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
                                                          with_col_aliases)
         if (sql, args) == ('', ()):
@@ -135,8 +134,12 @@ class SphinxQLCompiler(compiler.SQLCompiler):
     #     sql = re.sub(r'(%[^s])', '%%\1', sql)
     #     if isinstance(sql, six.binary_type):
     #         sql = sql.decode("utf-8")
-        e = self.connection.connection.literal
-        print (sql % tuple(e(a) for a in args))
+
+        # c = self.connection.cursor()
+        # e = self.connection.connection.literal
+        # c.close()
+        # print (sql % tuple(e(a) for a in args))
+
         return sql, args
 
     def get_group_ordering(self):

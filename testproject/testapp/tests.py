@@ -300,6 +300,11 @@ class SphinxModelTestCase(TestCase):
         qs = list(self.model.objects.match('hello').exclude(sphinx_field=sphinx_field))
         self.assertEqual(len(qs), 0)
 
+    def testCount(self):
+        self.create_multiple_models()
+        r = self.model.objects.filter(attr_uint__gte=-1).count()
+        self.assertEqual(r, 11)
+
     def testCastToChar(self):
         if self.no_string_compare:
             self.skipTest("string compare not supported by server")

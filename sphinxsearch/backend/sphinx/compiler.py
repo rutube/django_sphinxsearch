@@ -8,17 +8,11 @@ from django.db.models.lookups import Search, Exact
 from django.db.models.sql import compiler, AND
 
 
-# from django.db.models.sql.expressions import SQLEvaluator
-#
-# DJANGO15 = (1, 5, 0, 'alpha', 0)
-# DJANGO16 = (1, 6, 0, 'alpha', 0)
-#
-#
 from django.db.models.sql.constants import ORDER_DIR
 from django.db.models.sql.query import get_order_dir
 
 from django.utils import six
-from sphinxsearch.sql import SphinxWhereNode, SphinxExtraWhere
+from sphinxsearch import sql as sqls
 from sphinxsearch.utils import sphinx_escape
 
 
@@ -87,8 +81,7 @@ class SphinxQLCompiler(compiler.SQLCompiler):
 
     def as_sql(self, with_limits=True, with_col_aliases=False):
         """ Patching final SQL query."""
-        self.query = self.query.clone()
-        where, self.query.where = self.query.where, SphinxWhereNode()
+        where, self.query.where = self.query.where, sqls.SphinxWhereNode()
         match = getattr(self.query, 'match', None)
         if match:
             self._add_match_extra(match)
@@ -97,9 +90,16 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         connection = self.connection
 
         where_sql, where_params = where.as_sql(self, connection)
+        # moving where conditions to SELECT clause because of better support
+        # of SQL expressions in sphinxsearch.
         if where_sql:
+            # Without annotation queryset.count() receives 1 as where_result
+            # and count it as aggregation result.
+            self.query.add_annotation(
+                sqls.SphinxWhereExpression(where_sql, where_params),
+                '__where_result')
             self.query.add_extra(
-                {'__where_result': where_sql}, where_params,
+                None, None,
                 ['__where_result = %s'], (True,), None, None)
 
         sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
@@ -176,7 +176,7 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         decode = lambda _: _.decode("utf-8") if type(
             _) is six.binary_type else _
         match_expr = u"MATCH('%s')" % u' '.join(map(decode, expression))
-        self.query.where.add(SphinxExtraWhere([match_expr], []), AND)
+        self.query.where.add(sqls.SphinxExtraWhere([match_expr], []), AND)
 
 
 # Set SQLCompiler appropriately, so queries will use the correct compiler.

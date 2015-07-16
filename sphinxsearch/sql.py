@@ -4,9 +4,9 @@
 from collections import OrderedDict
 import functools
 from django.db import models
-from django.db.models import Count
+from django.db.models import Count, BooleanField
 from django.db.models.base import ModelBase
-from django.db.models.expressions import Col
+from django.db.models.expressions import Col, Func, BaseExpression
 from django.db.models.sql import Query
 from django.db.models.sql.where import WhereNode, ExtraWhere
 from django.utils.datastructures import OrderedSet
@@ -21,6 +21,19 @@ class SphinxCount(Count):
             compiler, connection, function=function, template=template)
         params.remove('*')
         return sql, params
+
+
+class SphinxWhereExpression(BaseExpression):
+    def __init__(self, where, where_params):
+        self.where = where
+        self.where_params = where_params
+        super(SphinxWhereExpression, self).__init__(output_field=BooleanField())
+    #
+    # def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
+    #     return self
+
+    def as_sql(self, compiler, connection):
+        return self.where, self.where_params
 
 
 class SphinxExtraWhere(ExtraWhere):

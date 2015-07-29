@@ -127,8 +127,11 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         # TODO: syntax check for option values is not performed
         options = getattr(self.query, 'options', None)
         if options:
+            keys = sorted(options.keys())
+            values = [options[k] for k in keys]
             sql += ' OPTION %s' % ', '.join(
-                ["%s=%s" % i for i in options.items()]) or ''
+                ["%s=%%s" % i for i in keys]) or ''
+            args += tuple(values)
     #
     #     # percents, added by raw formatting queries, escaped as %%
     #     sql = re.sub(r'(%[^s])', '%%\1', sql)

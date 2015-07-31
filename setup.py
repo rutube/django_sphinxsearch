@@ -1,7 +1,7 @@
 from distutils.core import setup
 import sys
 
-if sys.version_info[0] < (3, 0):
+if sys.version_info < (3, 0):
     mysql = 'MySQL-python'
 else:
     mysql = 'PyMySQL'
@@ -24,7 +24,7 @@ setup(
         'sphinxsearch.backend.sphinx',
     ],
     url='http://github.com/tumb1er/django_sphinxsearch',
-    license='Beer License',
+    license='Beerware',
     author='tumbler',
     author_email='zimbler@gmail.com',
     description='Sphinxsearch database backend for django>=1.8',

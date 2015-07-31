@@ -6,8 +6,6 @@ from django.core.exceptions import FieldError
 from django.db import models
 from django.db.models.lookups import Search, Exact
 from django.db.models.sql import compiler, AND
-
-
 from django.db.models.sql.constants import ORDER_DIR
 from django.db.models.sql.query import get_order_dir
 
@@ -20,6 +18,8 @@ class SphinxQLCompiler(compiler.SQLCompiler):
 
     def compile(self, node, select_format=False):
         sql, params = super(SphinxQLCompiler, self).compile(node, select_format)
+
+        # substitute MATCH() arguments with sphinx-escaped params
         if isinstance(node, Search):
             search_text = sphinx_escape(params[0])
             sql = sql % search_text
@@ -27,29 +27,38 @@ class SphinxQLCompiler(compiler.SQLCompiler):
 
         return sql, params
 
-    # def get_columns(self, *args, **kwargs):
-    #     result = columns = super(SphinxQLCompiler, self).get_columns(*args, **kwargs)
-    #     if django.VERSION < DJANGO16:
-    #         columns = result
-    #     else:
-    #         columns = result[0]
-    #     db_table = self.query.model._meta.db_table
-    #     for i, column in enumerate(columns):
-    #         if column.startswith(db_table + '.'):
-    #             column = column.partition('.')[2]
-    #         # fix not accepted expression (bool(value)) AS v
-    #         columns[i] = re.sub(r"^\((.*)\) AS ([\w\d\_]+)$", '\\1 AS \\2',
-    #                             column)
-    #     return result
-
     def get_group_by(self, select, order_by):
         res = super(SphinxQLCompiler, self).get_group_by(select, order_by)
+
+        # override GROUP BY columns for sphinxsearch's "GROUP N BY" support
         group_by = getattr(self.query, 'group_by', None)
         if group_by:
             return [r for r in res if r[0] in group_by]
+
         return res
 
+    @staticmethod
+    def _quote(s, negative=True):
+        """ Adds quotes and negates to match lookup expressions."""
+        prefix = '-' if negative else ''
+        if s.startswith('"'):
+            return s
+        negative = s.startswith('-')
+        if not negative:
+            return '"%s"' % s
+        s = s[1:]
+        if s.startswith('"'):
+            return '%s%s' % (prefix, s)
+        return '%s"%s"' % (prefix, s)
+
     def _serialize(self, values_list):
+        """ Serializes list of sphinx MATCH lookup expressions
+
+        :param values_list: list of match lookup expressions
+        :type values_list: str, list, tuple
+        :return: MATCH expression
+        :rtype: str
+        """""
         if isinstance(values_list, six.string_types):
             return values_list
         ensure_list = lambda s:  [s] if isinstance(s, six.string_types) else s
@@ -57,33 +66,23 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         positive_list = filter(lambda s: not s.startswith('-'), values_list)
         negative_list = filter(lambda s: s.startswith('-'), values_list)
 
-        def quote(s, negative=True):
-            prefix = '-' if negative else ''
-            if s.startswith('"'):
-                return s
-            negative = s.startswith('-')
-            if not negative:
-                return '"%s"' % s
-            s = s[1:]
-            if s.startswith('"'):
-                return '%s%s' % (prefix, s)
-            return '%s"%s"' % (prefix, s)
-
-        positive = "|".join(map(quote, positive_list))
+        positive = "|".join(map(self._quote, positive_list))
         if not positive_list:
-            negative = '|'.join(quote(n, negative=False) for n in negative_list)
+            negative = '|'.join(self._quote(n, negative=False)
+                                for n in negative_list)
             template = '%s -(%s)'
         else:
-            negative = ' '.join(map(quote, negative_list))
+            negative = ' '.join(map(self._quote, negative_list))
             template = '%s %s'
         result = template % (positive.strip(' '), negative.strip(' '))
         return result.strip(' ')
 
-    def as_sql(self, with_limits=True, with_col_aliases=False):
+    def as_sql(self, with_limits=True, with_col_aliases=False, subquery=False):
         """ Patching final SQL query."""
         where, self.query.where = self.query.where, sqls.SphinxWhereNode()
         match = getattr(self.query, 'match', None)
         if match:
+            # add match extra where
             self._add_match_extra(match)
         self.query.match = OrderedDict()
 
@@ -92,23 +91,29 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         where_sql, where_params = where.as_sql(self, connection)
         # moving where conditions to SELECT clause because of better support
         # of SQL expressions in sphinxsearch.
+
         if where_sql:
             # Without annotation queryset.count() receives 1 as where_result
             # and count it as aggregation result.
             self.query.add_annotation(
                 sqls.SphinxWhereExpression(where_sql, where_params),
                 '__where_result')
+            # almost all where conditions are now in SELECT clause, so
+            # WHERE should contain only test against that conditions are true
             self.query.add_extra(
                 None, None,
                 ['__where_result = %s'], (True,), None, None)
 
         sql, args = super(SphinxQLCompiler, self).as_sql(with_limits,
                                                          with_col_aliases)
+
+        # empty SQL doesn't need patching
         if (sql, args) == ('', ()):
             return sql, args
-        # removing unsupported OFFSET clause
+
+        # removing unsupported by sphinxsearch OFFSET clause
         # replacing it with LIMIT <offset>, <limit>
-        sql = re.sub(r'LIMIT ([\d]+) OFFSET ([\d]+)$', 'LIMIT \\2, \\1', sql)
+        sql = re.sub(r'LIMIT (\d+) OFFSET (\d+)$', 'LIMIT \\2, \\1', sql)
 
         # patching GROUP BY clause
         group_limit = getattr(self.query, 'group_limit', '')
@@ -121,10 +126,9 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         if group_by_ordering:
             # add WITHIN GROUP ORDER BY expression
             group_by += group_by_ordering
-        sql = re.sub(r'GROUP BY (([\w\d_]+)(, [\w\d_]+)*)', group_by, sql)
+        sql = re.sub(r'GROUP BY ((\w+)(, \w+)*)', group_by, sql)
 
-        # adding sphinx OPTION clause
-        # TODO: syntax check for option values is not performed
+        # adding sphinxsearch OPTION clause
         options = getattr(self.query, 'options', None)
         if options:
             keys = sorted(options.keys())
@@ -132,20 +136,14 @@ class SphinxQLCompiler(compiler.SQLCompiler):
             sql += ' OPTION %s' % ', '.join(
                 ["%s=%%s" % i for i in keys]) or ''
             args += tuple(values)
-    #
-    #     # percents, added by raw formatting queries, escaped as %%
-    #     sql = re.sub(r'(%[^s])', '%%\1', sql)
-    #     if isinstance(sql, six.binary_type):
-    #         sql = sql.decode("utf-8")
-
-        # c = self.connection.cursor()
-        # e = self.connection.connection.literal
-        # c.close()
-        # print (sql % tuple(e(a) for a in args))
-
         return sql, args
 
     def get_group_ordering(self):
+        """ Returns group ordering clause.
+
+        Formats WITHIN GROUP ORDER BY expression
+        with columns in query.group_order_by
+        """
         group_order_by = getattr(self.query, 'group_order_by', ())
         asc, desc = ORDER_DIR['ASC']
         if not group_order_by:
@@ -157,9 +155,12 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         return " WITHIN GROUP ORDER BY " + ", ".join(result)
 
     def _add_match_extra(self, match):
+        """ adds MATCH clause to query.where """
         expression = []
         all_field_expr = []
         all_fields_lookup = match.get('*')
+
+        # format expression to MATCH against any indexed fields
         if all_fields_lookup:
             if isinstance(all_fields_lookup, six.string_types):
                 expression.append(all_fields_lookup)
@@ -169,16 +170,23 @@ class SphinxQLCompiler(compiler.SQLCompiler):
                     value_str = self._serialize(value)
                     expression.append(value_str)
                     all_field_expr.append(value_str)
+
+        # format expressions to MATCH against concrete fields
         for sphinx_attr, lookup in match.items():
             if sphinx_attr == '*':
                 continue
+            # noinspection PyProtectedMember
             field = self.query.model._meta.get_field(sphinx_attr)
             db_column = field.db_column or field.attname
             expression.append('@' + db_column)
             expression.append("(%s)" % self._serialize(lookup))
+
+        # handle non-ascii characters in search expressions
         decode = lambda _: _.decode("utf-8") if type(
             _) is six.binary_type else _
         match_expr = u"MATCH('%s')" % u' '.join(map(decode, expression))
+
+        # add MATCH() to query.where
         self.query.where.add(sqls.SphinxExtraWhere([match_expr], []), AND)
 
 
@@ -195,18 +203,19 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SphinxQLCompiler):
 
 
 class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
+
+    # noinspection PyMethodOverriding
     def as_sql(self):
         node = self.is_single_row_update()
+        # determine whether use UPDATE (only fixed-length fields) or
+        # REPLACE (internal delete + insert) syntax
         need_replace = False
         if node:
-            need_replace = self.has_string_attrs()
+            need_replace = self._has_string_fields()
         if node and need_replace:
             sql, args = self.as_replace(node)
         else:
             sql, args = super(SQLUpdateCompiler, self).as_sql()
-        # e = self.connection.connection.literal
-        # print (sql % tuple(e(a) for a in args))
-
         return sql, args
 
     def is_single_row_update(self):
@@ -226,21 +235,27 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
 
         Must be used to change string attributes or indexed fields.
         """
+
+        # It's a copy of compiler.SQLUpdateCompiler.as_sql method
+        # that formats query more like INSERT than UPDATE
         self.pre_sql_setup()
         if not self.query.values:
             return '', ()
         table = self.query.tables[0]
         qn = self.quote_name_unless_alias
         result = ['REPLACE INTO %s' % qn(table)]
+        # noinspection PyProtectedMember
         meta = self.query.model._meta
         self.query.values.append((meta.pk, self.query.model, where_node.rhs))
         columns, values, update_params = [], [], []
 
         for field, model, val in self.query.values:
             if hasattr(val, 'resolve_expression'):
-                val = val.resolve_expression(self.query, allow_joins=False, for_save=True)
+                val = val.resolve_expression(self.query, allow_joins=False,
+                                             for_save=True)
                 if val.contains_aggregate:
-                    raise FieldError("Aggregate functions are not allowed in this query")
+                    raise FieldError(
+                        "Aggregate functions are not allowed in this query")
             elif hasattr(val, 'prepare_database_save'):
                 if field.rel:
                     val = field.get_db_prep_save(
@@ -248,10 +263,11 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
                         connection=self.connection,
                     )
                 else:
-                    raise TypeError("Database is trying to update a relational field "
-                                    "of type %s with a value of type %s. Make sure "
-                                    "you are setting the correct relations" %
-                                    (field.__class__.__name__, val.__class__.__name__))
+                    raise TypeError(
+                        "Database is trying to update a relational field "
+                        "of type %s with a value of type %s. Make sure "
+                        "you are setting the correct relations" %
+                        (field.__class__.__name__, val.__class__.__name__))
             else:
                 val = field.get_db_prep_save(val, connection=self.connection)
 
@@ -280,7 +296,8 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
         result.append(')')
         return ' '.join(result), tuple(update_params)
 
-    def has_string_attrs(self):
+    def _has_string_fields(self):
+        """ check whether query is updating text fields."""
         _excluded_update_fields = (
             models.CharField,
             models.TextField
@@ -293,7 +310,3 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
 
 class SQLAggregateCompiler(compiler.SQLAggregateCompiler, SphinxQLCompiler):
     pass
-#
-#
-# class SQLDateCompiler(compiler.SQLDateCompiler, SphinxQLCompiler):
-#     pass

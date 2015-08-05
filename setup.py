@@ -23,7 +23,7 @@ setup(
         'sphinxsearch.backend',
         'sphinxsearch.backend.sphinx',
     ],
-    url='http://github.com/tumb1er/django_sphinxsearch',
+    url='http://github.com/rutube/django_sphinxsearch',
     license='Beerware',
     author='tumbler',
     author_email='zimbler@gmail.com',

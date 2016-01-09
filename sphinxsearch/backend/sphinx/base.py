@@ -48,5 +48,4 @@ class DatabaseWrapper(base.DatabaseWrapper):
         # transactions for clearing data between tests when all OTHER backends
         # support it.
         self.features.supports_transactions = False
-
         self.features.allows_group_by_pk = False

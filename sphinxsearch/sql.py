@@ -19,7 +19,10 @@ class SphinxCount(Count):
     def as_sql(self, compiler, connection, function=None, template=None):
         sql, params = super(SphinxCount, self).as_sql(
             compiler, connection, function=function, template=template)
-        params.remove('*')
+        try:
+            params.remove('*')
+        except ValueError:
+            pass
         return sql, params
 
 

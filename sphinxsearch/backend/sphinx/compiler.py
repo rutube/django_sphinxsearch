@@ -87,7 +87,6 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         if match:
             # add match extra where
             self._add_match_extra(match)
-        self.query.match = OrderedDict()
 
         connection = self.connection
 
@@ -224,14 +223,27 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
         if node and need_replace:
             sql, args = self.as_replace(node)
         else:
+
+            match = getattr(self.query, 'match', None)
+            if match:
+                # add match extra where
+                self._add_match_extra(match)
+
             sql, args = super(SQLUpdateCompiler, self).as_sql()
         return sql, args
 
     def is_single_row_update(self):
         where = self.query.where
+        match = getattr(self.query, 'match', {})
         node = None
         if len(where.children) == 1:
             node = where.children[0]
+        elif match:
+            meta = self.query.model._meta
+            pk_match = match.get(meta.pk.attname)
+            if pk_match is not None:
+                pk_value = pk_match.dict.keys()[0]
+                return Exact(meta.pk.get_col(meta.db_table), pk_value)
         if not isinstance(node, Exact):
             node = None
         elif not node.lhs.field.primary_key:

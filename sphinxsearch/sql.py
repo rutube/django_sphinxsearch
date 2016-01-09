@@ -186,13 +186,29 @@ class SphinxCol(Col):
 
 
 class SphinxModelBase(ModelBase):
+
     def __new__(cls, name, bases, attrs):
+        # Each field must be monkey-patched with SphinxCol class to prevent
+        # `tablename`.`attr` appearing in SQL
         for attr in attrs.values():
             if isinstance(attr, models.Field):
                 col_patched = getattr(attr, '_col_patched', False)
                 if not col_patched:
                     cls.patch_col_class(attr)
-        return super(SphinxModelBase, cls).__new__(cls, name, bases, attrs)
+
+        new_class = super(SphinxModelBase, cls).__new__(cls, name, bases, attrs)
+
+        # if have overriden primary key, it should be the first local field,
+        # because of JSONField feature at jsonfield.subclassing.Creator.__set__
+        local_fields = new_class._meta.local_fields
+        try:
+            pk_idx = local_fields.index(new_class._meta.pk)
+            if pk_idx > 0:
+                local_fields.insert(0, local_fields.pop(pk_idx))
+        except ValueError:
+            pass
+
+        return new_class
 
     def add_to_class(cls, name, value):
         col_patched = getattr(value, '_col_patched', False)

@@ -9,7 +9,9 @@ from jsonfield.fields import JSONField
 from sphinxsearch import models as spx_models
 
 
-class TestModel(spx_models.SphinxModel):
+class FieldMixin(spx_models.SphinxModel):
+    class Meta:
+        abstract = True
     sphinx_field = spx_models.SphinxField(default='')
     other_field = spx_models.SphinxField(default='')
     attr_uint = models.IntegerField(default=0)
@@ -21,3 +23,15 @@ class TestModel(spx_models.SphinxModel):
     attr_multi_64 = spx_models.SphinxMulti64Field(default=[])
     attr_json = JSONField(default={})
     attr_bool = models.BooleanField(default=False)
+
+
+class TestModel(FieldMixin, spx_models.SphinxModel):
+    pass
+
+
+class ForcedPKModel(FieldMixin, spx_models.SphinxModel):
+
+    class Meta:
+        db_table = 'testapp_testmodel'
+
+    id = models.BigIntegerField(primary_key=True)

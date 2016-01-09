@@ -9,11 +9,13 @@ from django.db.models import Sum
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 import sys
-from testapp.models import TestModel
+from testapp.models import TestModel, ForcedPKModel
 
 
 class SphinxModelTestCase(TestCase):
     _id = 0
+
+    model = TestModel
 
     def _fixture_teardown(self):
         # self.truncate_model()
@@ -26,7 +28,6 @@ class SphinxModelTestCase(TestCase):
     def setUp(self):
         c = connections[settings.SPHINX_DATABASE_NAME]
         self.no_string_compare = c.mysql_version < (2, 2, 7)
-        self.model = TestModel
         self.truncate_model()
         self.now = datetime.now().replace(microsecond=0)
         self.defaults = {
@@ -318,3 +319,7 @@ class SphinxModelTestCase(TestCase):
         self.spx_queries.__exit__(*sys.exc_info())
         for query in self.spx_queries.captured_queries:
             print(query['sql'])
+
+
+class ForcedPKTestCase(SphinxModelTestCase):
+    model = ForcedPKModel

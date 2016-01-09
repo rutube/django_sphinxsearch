@@ -15,6 +15,9 @@ from sphinxsearch.utils import sphinx_escape
 
 
 class SphinxQLCompiler(compiler.SQLCompiler):
+    # Options names that are not escaped by compiler. Don't pass user input
+    # there.
+    safe_options = ('ranker', 'field_weights', 'index_weights')
 
     def compile(self, node, select_format=False):
         sql, params = super(SphinxQLCompiler, self).compile(node, select_format)
@@ -132,9 +135,15 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         options = getattr(self.query, 'options', None)
         if options:
             keys = sorted(options.keys())
-            values = [options[k] for k in keys]
-            sql += ' OPTION %s' % ', '.join(
-                ["%s=%%s" % i for i in keys]) or ''
+            values = [options[k] for k in keys if k not in self.safe_options]
+
+            opts = []
+            for k in keys:
+                if k in self.safe_options:
+                    opts.append("%s=%s" % (k, options[k]))
+                else:
+                    opts.append("%s=%%s" % k)
+            sql += ' OPTION %s' % ', '.join(opts) or ''
             args += tuple(values)
         return sql, args
 

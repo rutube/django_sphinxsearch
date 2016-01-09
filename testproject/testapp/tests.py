@@ -9,13 +9,13 @@ from django.db.models import Sum
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 import sys
-from testapp.models import TestModel, ForcedPKModel
+from testapp import models
 
 
-class SphinxModelTestCase(TestCase):
+class SphinxModelTestCaseBase(TestCase):
     _id = 0
 
-    model = TestModel
+    model = models.TestModel
 
     def _fixture_teardown(self):
         # self.truncate_model()
@@ -30,23 +30,26 @@ class SphinxModelTestCase(TestCase):
         self.no_string_compare = c.mysql_version < (2, 2, 7)
         self.truncate_model()
         self.now = datetime.now().replace(microsecond=0)
-        self.defaults = {
-            'id': self.newid(),
-            'sphinx_field': "hello sphinx field",
-            'attr_uint': 100500,
-            'attr_bool': True,
-            'attr_bigint': 2**33,
-            'attr_float': 1.2345,
-            'attr_multi': [1,2,3],
-            'attr_multi_64': [2**33, 2**34],
-            'attr_timestamp': self.now,
-            'attr_string': "hello sphinx attr",
-            "attr_json": {"json": "test"},
-        }
+        self.defaults = self.get_model_defaults()
         self.spx_queries = CaptureQueriesContext(
             connections[settings.SPHINX_DATABASE_NAME])
         self.spx_queries.__enter__()
         self.obj = self.model.objects.create(**self.defaults)
+
+    def get_model_defaults(self):
+        return {
+            'id': self.newid(),
+            'sphinx_field': "hello sphinx field",
+            'attr_uint': 100500,
+            'attr_bool': True,
+            'attr_bigint': 2 ** 33,
+            'attr_float': 1.2345,
+            'attr_multi': [1, 2, 3],
+            'attr_multi_64': [2 ** 33, 2 ** 34],
+            'attr_timestamp': self.now,
+            'attr_string': "hello sphinx attr",
+            "attr_json": {"json": "test"},
+        }
 
     @classmethod
     def newid(cls):
@@ -64,6 +67,14 @@ class SphinxModelTestCase(TestCase):
             if k == 'sphinx_field':
                 continue
             self.assertEqual(result[k], defaults[k])
+
+    def tearDown(self):
+        self.spx_queries.__exit__(*sys.exc_info())
+        for query in self.spx_queries.captured_queries:
+            print(query['sql'])
+
+
+class SphinxModelTestCase(SphinxModelTestCaseBase):
 
     def testInsertAttributes(self):
         other = self.reload_object(self.obj)
@@ -325,11 +336,19 @@ class SphinxModelTestCase(TestCase):
         other = self.model.objects.get(attr_string=100500)
         self.assertObjectEqualsToDefaults(other)
 
-    def tearDown(self):
-        self.spx_queries.__exit__(*sys.exc_info())
-        for query in self.spx_queries.captured_queries:
-            print(query['sql'])
-
 
 class ForcedPKTestCase(SphinxModelTestCase):
-    model = ForcedPKModel
+    model = models.ForcedPKModel
+
+
+class CharPKTestCase(SphinxModelTestCase):
+    model = models.CharPKModel
+
+    def get_model_defaults(self):
+        defaults = super(CharPKTestCase, self).get_model_defaults()
+        defaults['docid'] = str(defaults['id'])
+        return defaults
+
+
+
+

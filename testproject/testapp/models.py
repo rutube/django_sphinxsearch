@@ -35,3 +35,9 @@ class ForcedPKModel(FieldMixin, spx_models.SphinxModel):
         db_table = 'testapp_testmodel'
 
     id = models.BigIntegerField(primary_key=True)
+
+
+class CharPKModel(FieldMixin, spx_models.SphinxModel):
+
+    docid = spx_models.SphinxField(primary_key=True)
+    id = models.BigIntegerField(unique=True)

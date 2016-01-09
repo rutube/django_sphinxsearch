@@ -234,7 +234,7 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
             node = where.children[0]
         if not isinstance(node, Exact):
             node = None
-        if not node.lhs.field.primary_key:
+        elif not node.lhs.field.primary_key:
             node = None
         return node
 

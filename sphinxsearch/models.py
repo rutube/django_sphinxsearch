@@ -1,4 +1,5 @@
 # coding: utf-8
+from collections import OrderedDict
 from copy import copy
 
 from django.db.models import QuerySet
@@ -256,7 +257,7 @@ class SphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)):
 
     objects = SphinxManager()
 
-    id = models.BigIntegerField(primary_key=True)
+#    id = models.BigIntegerField(primary_key=True)
 
     _excluded_update_fields = (
         models.CharField,

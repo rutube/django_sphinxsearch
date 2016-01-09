@@ -31,9 +31,6 @@ class SphinxWhereExpression(BaseExpression):
         self.where = where
         self.where_params = where_params
         super(SphinxWhereExpression, self).__init__(output_field=BooleanField())
-    #
-    # def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
-    #     return self
 
     def as_sql(self, compiler, connection):
         return self.where, self.where_params
@@ -47,11 +44,6 @@ class SphinxExtraWhere(ExtraWhere):
 
 
 class SphinxWhereNode(WhereNode):
-    # def sql_for_columns(self, data, qn, connection, field_internal_type=None):
-    #     table_alias, name, db_type = data
-    #     if django.get_version() < "1.6":
-    #         return connection.ops.field_cast_sql(db_type) % name
-    #     return connection.ops.field_cast_sql(db_type, field_internal_type) % name
 
     def make_atom(self, child, qn, connection):
         """
@@ -94,30 +86,10 @@ class SphinxWhereNode(WhereNode):
                 raise ValueError("Negative '%s' lookup not supported" % lookup_type)
         return sql, params
 
-    # def as_sql(self, qn, connection):
-    #     if not hasattr(self, '_real_negated'):
-    #         self._real_negated = self.negated
-    #     # don't allow Django to add unsupported NOT (...) before all lookups
-    #     self.negated = False
-    #     # pass-through real negated value (OR connector not supported)
-    #     if self._real_negated:
-    #         for child in self.children:
-    #             if type(child) is tuple:
-    #                 child[0]._real_negated = True
-    #             else:
-    #                 child._real_negated = True
-    #     sql_string, result_params = super(SphinxWhereNode, self).as_sql(qn, connection)
-    #     self.negated = self._real_negated
-    #     return sql_string, result_params
-
-
 
 class SphinxQuery(Query):
     _clonable = ('options', 'match', 'group_limit', 'group_order_by',
                  'with_meta')
-    #
-    # aggregates_module = sphinx_aggregates
-    #
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('where', SphinxWhereNode)
@@ -146,28 +118,6 @@ class SphinxQuery(Query):
                 self.match[field].update(expression)
             else:
                 self.match[field].add(expression)
-
-
-    # def __str__(self):
-    #     def to_str(text):
-    #         if type(text) is unicode:
-    #             # u'тест' => '\xd1\x82\xd0\xb5\xd1\x81\xd1\x82'
-    #             return text.encode('utf-8')
-    #         else:
-    #             # 'тест' => u'\u0442\u0435\u0441\u0442' => '\xd1\x82\xd0\xb5\xd1\x81\xd1\x82'
-    #             # 'test123' => 'test123'
-    #             return str(text)
-    #
-    #     compiler = SphinxQLCompiler(self, connection, None)
-    #     query, params = compiler.as_sql()
-    #
-    #     params = tuple(map(lambda p: to_str(p), params))
-    #     return to_str(query % params)
-    #
-    # def __unicode__(self):
-    #     compiler = SphinxQLCompiler(self, connection, None)
-    #     query, params = compiler.as_sql()
-    #     return unicode(query % params)
 
     def get_count(self, using):
         """

@@ -195,6 +195,9 @@ class SphinxModelBase(ModelBase):
         return super(SphinxModelBase, cls).__new__(cls, name, bases, attrs)
 
     def add_to_class(cls, name, value):
+        col_patched = getattr(value, '_col_patched', False)
+        if not col_patched and isinstance(value, models.Field):
+            cls.patch_col_class(value)
         super(SphinxModelBase, cls).add_to_class(name, value)
 
     @classmethod

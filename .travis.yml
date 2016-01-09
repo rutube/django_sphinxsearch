@@ -6,6 +6,7 @@ python:
 
 env:
   - DJANGO=1.8
+  - DJANGO=1.9
 
 # command to install dependencies
 install:

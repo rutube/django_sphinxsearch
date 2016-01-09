@@ -263,6 +263,16 @@ class SphinxModelTestCase(TestCase):
         qs = list(self.model.objects.match("hello"))
         self.assertEqual(len(qs), 1)
         qs = list(self.model.objects.match("hello").match("world"))
+        self.assertEqual(len(qs), 0)
+
+    def testOptionClause(self):
+        qs = list(self.model.objects.match("hello").options(
+            ranker="expr('sum(lcs*user_weight)*1000+bm25')",
+            field_weights="(sphinx_field=3,other_field=2)",
+            index_weights="(testapp_testindex=2)",
+            sort_method="kbuffer"
+        ))
+        self.assertEqual(len(qs), 1)
 
     def testOrderBy(self):
         expected = self.create_multiple_models()

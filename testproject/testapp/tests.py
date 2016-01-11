@@ -103,7 +103,7 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
     def testGroupByExtraSelect(self):
         qs = self.model.objects.all()
         qs = qs.extra(
-            select={'extra': 'CEIL(attr_uint/3600)'})
+            select={'extra': 'CEIL(attr_uint_/3600)'})
 
         qs = qs.group_by('extra')
         qs = list(qs)

@@ -36,7 +36,9 @@ class SphinxQLCompiler(compiler.SQLCompiler):
         # override GROUP BY columns for sphinxsearch's "GROUP N BY" support
         group_by = getattr(self.query, 'group_by', None)
         if group_by:
-            return [r for r in res if r[0] in group_by]
+            fields = self.query.model._meta.fields
+            field_columns = [f.column for f in fields if f.attname in group_by]
+            return [r for r in res if r[0] in field_columns]
 
         return res
 

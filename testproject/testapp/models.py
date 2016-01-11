@@ -14,7 +14,7 @@ class FieldMixin(spx_models.SphinxModel):
         abstract = True
     sphinx_field = spx_models.SphinxField(default='')
     other_field = spx_models.SphinxField(default='')
-    attr_uint = models.IntegerField(default=0)
+    attr_uint = models.IntegerField(default=0, db_column='attr_uint_')
     attr_bigint = models.BigIntegerField(default=0)
     attr_float = models.FloatField(default=0.0)
     attr_timestamp = spx_models.SphinxDateTimeField(default=datetime.now)

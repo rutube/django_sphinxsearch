@@ -1,11 +1,11 @@
 # coding: utf-8
-from collections import OrderedDict
 from copy import copy
 
 from django.db.models import QuerySet
+from django.db.models.expressions import RawSQL
 
-from sphinxsearch.fields import *
 from sphinxsearch import sql
+from sphinxsearch.fields import *
 from sphinxsearch.utils import sphinx_escape
 
 
@@ -46,16 +46,6 @@ class SphinxQuerySet(QuerySet):
             field = self.model._meta.get_field(field_name)
         return field, lookup
 
-    #
-    # def using(self, alias):
-    #     # Ignore the alias. This will allow the Django router to decide
-    #     # what db receives the query. Otherwise, when dealing with related
-    #     # models, Django tries to force all queries to the same database.
-    #     # This is the right thing to do in cases of master/slave or sharding
-    #     # but with Sphinx, we want all related queries to flow to Sphinx,
-    #     # never another configured database.
-    #     return self._clone()
-
     def _negate_expression(self, negate, lookup):
         if isinstance(lookup, (tuple, list)):
             result = []
@@ -72,47 +62,6 @@ class SphinxQuerySet(QuerySet):
                 lookup = '-%s' % lookup
             return lookup
 
-    #
-    # def _filter_or_exclude(self, negate, *args, **kwargs):
-    #     """ String attributes can't be compared with = term, so they are
-    #     replaced with MATCH('@field_name "value"')."""
-    #     match_kwargs = {}
-    #     for lookup, value in list(kwargs.items()):
-    #         try:
-    #             tokens = lookup.split('__')
-    #             field_name = tokens[0]
-    #             lookup_type = None
-    #             if len(tokens) == 2:
-    #                 lookup_type = tokens[1]
-    #             elif len(tokens) > 2:
-    #                 raise ValueError("Can't build correct lookup for %s" % lookup)
-    #             if lookup == 'pk':
-    #                 field = self.model._meta.pk
-    #             else:
-    #                 field = self.model._meta.get_field(field_name)
-    #             if isinstance(field, models.CharField):
-    #                 if lookup_type and lookup_type not in ('in', 'exact', 'startswith'):
-    #                     raise ValueError("Can't build correct lookup for %s" % lookup)
-    #                 if lookup_type == 'startswith':
-    #                     value = value + '*'
-    #                 field_name = field.attname
-    #                 match_kwargs.setdefault(field_name, set())
-    #                 sphinx_lookup = sphinx_escape(value)
-    #                 sphinx_expr = self._negate_expression(negate, sphinx_lookup)
-    #                 if isinstance(sphinx_expr, list):
-    #                     match_kwargs[field_name].update(sphinx_expr)
-    #                 else:
-    #                     match_kwargs[field_name].add(sphinx_expr)
-    #                 del kwargs[lookup]
-    #         except models.FieldDoesNotExist:
-    #             continue
-    #     if match_kwargs:
-    #         return self.match(**match_kwargs)._filter_or_exclude(negate, *args, **kwargs)
-    #     return super(SphinxQuerySet, self)._filter_or_exclude(negate, *args, **kwargs)
-    #
-    # def get(self, *args, **kwargs):
-    #     return super(SphinxQuerySet, self).get(*args, **kwargs)
-    #
     def match(self, *args, **kwargs):
         """ Enables full-text searching in sphinx (MATCH expression).
 
@@ -161,7 +110,7 @@ class SphinxQuerySet(QuerySet):
                 field = self.model._meta.get_field_by_name(field_name)[0]
                 qs.query.group_by.append(field.column)
             else:
-                qs.query.group_by.append(field_name)
+                qs.query.group_by.append(RawSQL(field_name, []))
         qs.query.group_limit = group_limit
         qs.query.group_order_by = group_order_by
         return qs
@@ -204,6 +153,7 @@ class SphinxQuerySet(QuerySet):
             value = [value]
         placeholders = ', '.join(['%s'] * len(value))
         condition = "IN(%s, %s)" % (field.column, placeholders)
+        value = [field.get_prep_value(v) for v in value]
         if negate:
             condition = "NOT (%s)" % condition
         self.query.add_extra(None, None, [condition], value, None, None)
@@ -256,8 +206,6 @@ class SphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)):
         abstract = True
 
     objects = SphinxManager()
-
-#    id = models.BigIntegerField(primary_key=True)
 
     _excluded_update_fields = (
         models.CharField,

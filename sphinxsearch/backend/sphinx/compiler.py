@@ -242,7 +242,7 @@ class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):
             meta = self.query.model._meta
             pk_match = match.get(meta.pk.attname)
             if pk_match is not None:
-                pk_value = pk_match.dict.keys()[0]
+                pk_value = list(pk_match.dict.keys())[0]
                 return Exact(meta.pk.get_col(meta.db_table), pk_value)
         if not isinstance(node, Exact):
             node = None

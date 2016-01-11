@@ -1,6 +1,8 @@
 # coding: utf-8
 from copy import copy
 
+from django.conf import settings
+from django.db import connections
 from django.db.models import QuerySet
 from django.db.models.expressions import RawSQL
 
@@ -86,6 +88,12 @@ class SphinxQuerySet(QuerySet):
             qs.query.options = kw
         return qs
 
+    def with_meta(self):
+        """ Force call SHOW META after fetching queryset data from searchd."""
+        qs = self._clone()
+        qs.query.with_meta = True
+        return qs
+
     def group_by(self, *args, **kwargs):
         """
         :param args: list of fields to group by
@@ -168,6 +176,22 @@ class SphinxQuerySet(QuerySet):
             value = '-%s' % value
         self.query.add_match(**{field.column: value})
         return True
+
+    def _fetch_meta(self):
+        c = connections[settings.SPHINX_DATABASE_NAME].cursor()
+        try:
+            c.execute("SHOW META")
+            self.meta = dict([c.fetchone()])
+        except UnicodeDecodeError:
+            self.meta = {}
+        finally:
+            c.close()
+
+    def iterator(self):
+        for row in super(SphinxQuerySet, self).iterator():
+            yield row
+        if getattr(self.query, 'with_meta', False):
+            self._fetch_meta()
 
 class SphinxManager(models.Manager):
     use_for_related_fields = True

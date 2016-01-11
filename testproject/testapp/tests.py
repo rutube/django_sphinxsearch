@@ -1,14 +1,16 @@
 # coding: utf-8
 
 # $Id: $
+import sys
 from datetime import datetime, timedelta
-from unittest import skip, expectedFailure
+from unittest import expectedFailure
+
 from django.conf import settings
 from django.db import connections
 from django.db.models import Sum
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
-import sys
+
 from testapp import models
 
 
@@ -94,6 +96,19 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
                 self.fail("lookup failed for %s = %s" % (key, value))
             self.assertObjectEqualsToDefaults(other)
 
+    def testExtraWhere(self):
+        qs = list(self.model.objects.extra(select={'const': 0}, where=['const=0']))
+        self.assertEqual(len(qs), 1)
+
+    def testGroupByExtraSelect(self):
+        qs = self.model.objects.all()
+        qs = qs.extra(
+            select={'extra': 'CEIL(attr_uint/3600)'})
+
+        qs = qs.group_by('extra')
+        qs = list(qs)
+        self.assertEqual(len(qs), 1)
+
     def testSelectByMulti(self):
         multi_lookups = dict(
             attr_multi=self.obj.attr_multi[0],
@@ -115,6 +130,19 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
                 continue
             value = getattr(self.obj, key)
             count = self.model.objects.exclude(**{key: value}).count()
+            self.assertEqual(count, 0)
+
+    def testExcludeAttrByList(self):
+        exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field',
+                   'attr_float', 'docid']
+        if self.no_string_compare:
+            exclude.extend(['attr_string'])
+        for key in self.defaults.keys():
+            if key in exclude:
+                continue
+            value = getattr(self.obj, key)
+            filter_kwargs = {"%s__in" % key: [value]}
+            count = self.model.objects.exclude(**filter_kwargs).count()
             self.assertEqual(count, 0)
 
     def testNumericAttrLookups(self):

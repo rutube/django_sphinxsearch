@@ -120,6 +120,13 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
             other = self.model.objects.get(**{k: v})
             self.assertObjectEqualsToDefaults(other)
 
+    def testShowMeta(self):
+        qs = self.model.objects.all().with_meta()
+        self.assertEqual(len(list(qs)), 1)
+        self.assertTrue(hasattr(qs, 'meta'))
+        self.assertIsInstance(qs.meta, dict)
+        self.assertDictEqual(qs.meta, {'total': '1'})
+
     def testExcludeByAttrs(self):
         exclude = ['attr_multi', 'attr_multi_64', 'attr_json', 'sphinx_field',
                    'attr_float', 'docid']

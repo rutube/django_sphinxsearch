@@ -19,6 +19,10 @@ class SphinxModelTestCaseBase(TransactionTestCase):
 
     model = models.TestModel
 
+    def _fixture_teardown(self):
+        # Prevent SHOW FULL TABLES call
+        pass
+
     def truncate_model(self):
         c = connections[settings.SPHINX_DATABASE_NAME].cursor()
         c.execute("TRUNCATE RTINDEX %s" % self.model._meta.db_table)

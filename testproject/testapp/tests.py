@@ -8,24 +8,25 @@ from unittest import expectedFailure
 from django.conf import settings
 from django.db import connections
 from django.db.models import Sum
-from django.test import TestCase
+from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 
 from testapp import models
 
 
-class SphinxModelTestCaseBase(TestCase):
+class SphinxModelTestCaseBase(TransactionTestCase):
     _id = 0
 
     model = models.TestModel
 
     def _fixture_teardown(self):
-        # self.truncate_model()
+        # Prevent SHOW FULL TABLES call
         pass
 
     def truncate_model(self):
         c = connections[settings.SPHINX_DATABASE_NAME].cursor()
         c.execute("TRUNCATE RTINDEX %s" % self.model._meta.db_table)
+        c.close()
 
     def setUp(self):
         c = connections[settings.SPHINX_DATABASE_NAME]

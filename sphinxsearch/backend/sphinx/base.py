@@ -47,5 +47,6 @@ class DatabaseWrapper(base.DatabaseWrapper):
         # Therefore, we can just set this to True, and Django will use
         # transactions for clearing data between tests when all OTHER backends
         # support it.
-        self.features.supports_transactions = False
+        self.features.supports_transactions = True
         self.features.allows_group_by_pk = False
+        self.features.uses_savepoints = False

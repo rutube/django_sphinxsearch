@@ -68,7 +68,6 @@ class SphinxModelTestCaseBase(TransactionTestCase):
             self.assertEqual(result[k], defaults[k])
 
     def tearDown(self):
-        print("td")
         self.spx_queries.__exit__(*sys.exc_info())
         for query in self.spx_queries.captured_queries:
             print(query['sql'])

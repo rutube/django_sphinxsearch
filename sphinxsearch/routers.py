@@ -18,7 +18,7 @@ class SphinxRouter(object):
             model = model_or_obj.__class__
         else:
             model = model_or_obj
-        is_sphinx_model = issubclass(model, SphinxModel)
+        is_sphinx_model = issubclass(model, SphinxModel) or type(model) is SphinxModelBase
         return is_sphinx_model
 
     def db_for_read(self, model, **kwargs):

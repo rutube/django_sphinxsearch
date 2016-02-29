@@ -207,6 +207,8 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.assertFalse(other.attr_bool)
 
     def testDelete(self):
+        if self.no_string_compare:
+            self.skipTest("searchd version is too low")
         self.assertEqual(self.model.objects.count(), 1)
         self.obj.delete()
         self.assertEqual(self.model.objects.count(), 0)

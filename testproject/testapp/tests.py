@@ -3,7 +3,6 @@
 # $Id: $
 import sys
 from datetime import datetime, timedelta
-from unittest import expectedFailure
 
 from django.conf import settings
 from django.db import connections
@@ -12,6 +11,7 @@ from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 
 from testapp import models
+from sphinxsearch.routers import SphinxRouter
 
 
 class SphinxModelTestCaseBase(TransactionTestCase):
@@ -377,6 +377,10 @@ class ForcedPKTestCase(SphinxModelTestCase):
     model = models.ForcedPKModel
 
 
+class TestOverridenSphinxModel(SphinxModelTestCase):
+    model = models.OverridenSphinxModel
+
+
 class CharPKTestCase(SphinxModelTestCase):
     model = models.CharPKModel
 
@@ -385,10 +389,30 @@ class CharPKTestCase(SphinxModelTestCase):
         defaults['docid'] = str(defaults['id'])
         return defaults
 
-    @expectedFailure
     def testDelete(self):
         super(CharPKTestCase, self).testDelete()
 
 
+class TestSphinxRouter(SphinxModelTestCaseBase):
+    def setUp(self):
+        super(TestSphinxRouter, self).setUp()
+        self.router = SphinxRouter()
 
+    def testSphinxModelDetection(self):
+        self.assertTrue(self.router.is_sphinx_model(
+            models.TestModel))
 
+        self.assertTrue(self.router.is_sphinx_model(
+            models.TestModel()))
+
+        self.assertTrue(self.router.is_sphinx_model(
+            models.OverridenSphinxModel))
+
+        self.assertTrue(self.router.is_sphinx_model(
+            models.OverridenSphinxModel()))
+
+        self.assertFalse(self.router.is_sphinx_model(
+            models.DefaultDjangoModel))
+
+        self.assertFalse(self.router.is_sphinx_model(
+            models.DefaultDjangoModel()))

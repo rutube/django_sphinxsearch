@@ -36,9 +36,11 @@ class SphinxDateTimeField(models.FloatField):
         return datetime.datetime.fromtimestamp(value)
 
 
-class SphinxMultiField(models.IntegerField):
+class SphinxIntegerField(models.IntegerField):
     class_lookups = sphinx_lookups.copy()
 
+
+class SphinxMultiField(models.IntegerField):
     def get_prep_value(self, value):
         if value is None:
             return None

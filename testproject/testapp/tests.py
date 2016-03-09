@@ -6,10 +6,9 @@ from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.db import connections
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
-from django.db.models import Q
 
 from testapp import models
 from sphinxsearch.routers import SphinxRouter

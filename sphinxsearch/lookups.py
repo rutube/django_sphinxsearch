@@ -1,6 +1,9 @@
 # coding: utf-8
 
-from django.db.models.lookups import default_lookups, In
+from django.db.models.lookups import In
+from django.db.models.fields import Field
+
+sphinx_lookups = Field.class_lookups.copy()
 
 
 class SphinxIn(In):
@@ -11,5 +14,4 @@ class SphinxIn(In):
         return '(IN(%s, %s))' % (lhs, rhs_sql), rhs_params
 
 
-sphinx_lookups = default_lookups.copy()
 sphinx_lookups['in'] = SphinxIn

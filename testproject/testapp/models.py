@@ -9,6 +9,7 @@ from jsonfield.fields import JSONField
 
 from sphinxsearch import sql
 from sphinxsearch import models as spx_models
+from sphinxsearch import fields as spx_fields
 
 
 class FieldMixin(spx_models.SphinxModel):
@@ -16,8 +17,8 @@ class FieldMixin(spx_models.SphinxModel):
         abstract = True
     sphinx_field = spx_models.SphinxField(default='')
     other_field = spx_models.SphinxField(default='')
-    attr_uint = models.IntegerField(default=0, db_column='attr_uint_')
-    attr_bigint = models.BigIntegerField(default=0)
+    attr_uint = spx_fields.SphinxIntegerField(default=0, db_column='attr_uint_')
+    attr_bigint = spx_models.SphinxBigIntegerField(default=0)
     attr_float = models.FloatField(default=0.0)
     attr_timestamp = spx_models.SphinxDateTimeField(default=datetime.now)
     attr_string = models.CharField(max_length=32, default='')
@@ -48,8 +49,8 @@ class OverridenSphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)
 
     sphinx_field = spx_models.SphinxField(default='')
     other_field = spx_models.SphinxField(default='')
-    attr_uint = models.IntegerField(default=0, db_column='attr_uint_')
-    attr_bigint = models.BigIntegerField(default=0)
+    attr_uint = spx_models.SphinxIntegerField(default=0, db_column='attr_uint_')
+    attr_bigint = spx_models.SphinxBigIntegerField(default=0)
     attr_float = models.FloatField(default=0.0)
     attr_timestamp = spx_models.SphinxDateTimeField(default=datetime.now)
     attr_string = models.CharField(max_length=32, default='')
@@ -64,10 +65,10 @@ class ForcedPKModel(FieldMixin, spx_models.SphinxModel):
     class Meta:
         db_table = 'testapp_testmodel'
 
-    id = models.BigIntegerField(primary_key=True)
+    id = models.IntegerField(primary_key=True)
 
 
 class CharPKModel(FieldMixin, spx_models.SphinxModel):
 
     docid = spx_models.SphinxField(primary_key=True)
-    id = models.BigIntegerField(unique=True)
+    id = spx_models.SphinxBigIntegerField(unique=True)

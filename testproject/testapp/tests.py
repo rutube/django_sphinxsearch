@@ -9,6 +9,7 @@ from django.db import connections
 from django.db.models import Sum
 from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
+from django.db.models import Q
 
 from testapp import models
 from sphinxsearch.routers import SphinxRouter
@@ -373,6 +374,38 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.defaults['attr_string'] = '100500'
         other = self.model.objects.get(attr_string=100500)
         self.assertObjectEqualsToDefaults(other)
+
+    def testWorkWithRangeInQ(self):
+        self.create_multiple_models()
+        total = len(self.model.objects.all()[:1000])
+
+        # simple Q
+        result = self.model.objects.filter(Q(attr_uint__in=[2, 4, 0]))
+        self.assertEqual(3, len(result))
+        self.assertEqual(0, result[0].attr_uint)
+        self.assertEqual(2, result[1].attr_uint)
+        self.assertEqual(4, result[2].attr_uint)
+
+        # Q with negation
+        result = self.model.objects.filter(~Q(attr_uint__in=[2, 4, 0]))
+        self.assertEqual(total - 3, len(result))
+        for item in result:
+            self.assertNotIn(item.attr_uint, [0, 2, 4])
+
+        # Q in exclude
+        result = self.model.objects.exclude(Q(attr_uint__in=[2, 4, 0]))
+        self.assertEqual(total - 3, len(result))
+        for item in result:
+            self.assertNotIn(item.attr_uint, [0, 2, 4])
+
+        # complex Q
+        result = self.model.objects.filter(
+            Q(Q(attr_uint__in=[2]) | Q(attr_uint__in=[4, 0])))
+
+        self.assertEqual(3, len(result))
+        self.assertEqual(0, result[0].attr_uint)
+        self.assertEqual(2, result[1].attr_uint)
+        self.assertEqual(4, result[2].attr_uint)
 
 
 class ForcedPKTestCase(SphinxModelTestCase):

@@ -40,6 +40,10 @@ class SphinxIntegerField(models.IntegerField):
     class_lookups = sphinx_lookups.copy()
 
 
+class SphinxBigIntegerField(models.BigIntegerField):
+    class_lookups = sphinx_lookups.copy()
+
+
 class SphinxMultiField(models.IntegerField):
     def get_prep_value(self, value):
         if value is None:

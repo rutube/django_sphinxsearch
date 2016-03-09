@@ -138,6 +138,5 @@ string attributes were not comparible till v2.2.7.
 * uint attributes accept -1 but return it as unsigned 32bit integer.
 * bigint accept 2**63 + 1 but return it as signed 64bit integer.
 * use SphinxIntegerField and SphinxBigIntegerField instead of IntegerField and
-BigIntegerField from django.db.models, because default fields doesn't working correctly
-with range filtering in Q objects.
-
+BigIntegerField from django.db.models, because IN is an expression in
+SQL (value IN column), but a function (IN(value, column)) in sphinxsearch.

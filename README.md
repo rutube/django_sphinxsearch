@@ -57,6 +57,7 @@
     ```
 
 4. Define Django model for index
+
     ```python
     import six
     from datetime import datetime

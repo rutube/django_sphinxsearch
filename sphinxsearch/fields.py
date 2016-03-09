@@ -4,6 +4,7 @@
 import datetime
 import time
 
+from sphinxsearch.lookups import sphinx_lookups
 from django.core import exceptions
 from django.db import models
 from django.utils import six
@@ -35,8 +36,15 @@ class SphinxDateTimeField(models.FloatField):
         return datetime.datetime.fromtimestamp(value)
 
 
-class SphinxMultiField(models.IntegerField):
+class SphinxIntegerField(models.IntegerField):
+    class_lookups = sphinx_lookups.copy()
 
+
+class SphinxBigIntegerField(models.BigIntegerField):
+    class_lookups = sphinx_lookups.copy()
+
+
+class SphinxMultiField(models.IntegerField):
     def get_prep_value(self, value):
         if value is None:
             return None

@@ -139,4 +139,4 @@ string attributes were not comparible till v2.2.7.
 * bigint accept 2**63 + 1 but return it as signed 64bit integer.
 * use SphinxIntegerField and SphinxBigIntegerField instead of IntegerField and
 BigIntegerField from django.db.models, because IN is an expression in
-SQL (value IN column), but a function (IN(value, column)) in sphinxsearch.
+SQL (`value IN column`), but a function (`IN(value, column)`) in sphinxsearch.

@@ -406,6 +406,62 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.assertEqual(2, result[1].attr_uint)
         self.assertEqual(4, result[2].attr_uint)
 
+    def testMVAWorkWithRangeInQFor(self):
+        self.create_multiple_models()
+        items = self.model.objects.all()
+        total = len(items)
+
+        for i, item in enumerate(items):
+            mva_values = [_ + 1 for _ in range(i)]
+            item.attr_multi = mva_values
+            item.save()
+
+        # simple Q
+        result = self.model.objects.filter(Q(attr_multi__in=[100500, 777]))
+        self.assertFalse(result)
+
+        # all items excepts the first(attr_multi==[])
+        result = self.model.objects.filter(Q(attr_multi__in=[1, 3]))
+        self.assertEqual(total - 1, len(result))
+        for item in result:
+            self.assertTrue(set([1, 3]) and set(item.attr_multi))
+
+        # same result
+        result = self.model.objects.filter(Q(attr_multi__in=[1, 3, 999]))
+        self.assertEqual(total - 1, len(result))
+
+        items[0].attr_multi.append(999)
+        items[0].save()
+        # now all items in result
+        result = self.model.objects.filter(Q(attr_multi__in=[1, 3, 999]))
+
+        self.assertEqual(total, len(result))
+        self.assertIn(items[0], result)
+
+        # complex Q
+        result = self.model.objects.filter(
+            Q(attr_multi__in=[1, 3]) | Q(attr_multi__in=[999]))
+
+        self.assertEqual(total, len(result))
+
+        # Q with negation
+        # result does not contains first and last items
+        result = self.model.objects.filter(~Q(attr_multi__in=[total - 1, 999]))
+        self.assertEqual(total - 2, len(result))
+
+        for item in result:
+            self.assertNotIn(total - 1, item.attr_multi)
+            self.assertNotIn(999, item.attr_multi)
+
+        # Q in exclude
+        # result does not contains first and last items
+        result = self.model.objects.exclude(Q(attr_multi__in=[total - 1, 999]))
+        self.assertEqual(total - 2, len(result))
+
+        self.assertNotIn(total - 1, item.attr_multi)
+        self.assertNotIn(999, item.attr_multi)
+
+
 
 class ForcedPKTestCase(SphinxModelTestCase):
     model = models.ForcedPKModel

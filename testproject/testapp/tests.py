@@ -413,7 +413,6 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
 
         for i, item in enumerate(items):
             mva_values = [_ + 1 for _ in range(i)]
-            print("%s: %s" % (i, mva_values))
             item.attr_multi = mva_values
             item.save()
 

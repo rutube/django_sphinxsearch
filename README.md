@@ -57,26 +57,33 @@
     ```
 
 4. Define Django model for index
-
     ```python
-
+    import six
     from datetime import datetime
     from django.db import models
 
     from jsonfield.fields import JSONField
 
+    from sphinxsearch import sql
     from sphinxsearch import models as spx_models
 
-    class TestModel(spx_models.SphinxModel):
+
+    class FieldMixin(spx_models.SphinxModel):
         # Note that NULL values are not allowed for sphinx rt-index.
+        # Indexed text field. If no attribute with same name defined, can't be
+        # retrieved from index.
+
+        class Meta:
+            abstract = True
 
         # Indexed text field. If no attribute with same name defined, can't be
         # retrieved from index.
         sphinx_field = spx_models.SphinxField(default='')
+        other_field = spx_models.SphinxField(default='')
 
         # Numeric attributes
-        attr_uint = models.IntegerField(default=0)
-        attr_bigint = models.BigIntegerField(default=0)
+        attr_uint = spx_models.SphinxIntegerField(default=0, db_column='attr_uint_')
+        attr_bigint = spx_models.SphinxBigIntegerField(default=0)
         attr_float = models.FloatField(default=0.0)
         attr_timestamp = spx_models.SphinxDateTimeField(default=datetime.now)
         attr_bool = models.BooleanField(default=False)
@@ -88,6 +95,10 @@
         # Multi-value fields (sets of integer values)
         attr_multi = spx_models.SphinxMultiField(default=[])
         attr_multi_64 = spx_models.SphinxMulti64Field(default=[])
+
+
+    class TestModel(FieldMixin, spx_models.SphinxModel):
+        pass
     ```
 
 5. Query index from your app
@@ -126,3 +137,7 @@ string attributes were not comparible till v2.2.7.
 * Without limits sphinxsearch returns only 20 matched documents.
 * uint attributes accept -1 but return it as unsigned 32bit integer.
 * bigint accept 2**63 + 1 but return it as signed 64bit integer.
+* use SphinxIntegerField and SphinxBigIntegerField instead of IntegerField and
+BigIntegerField from django.db.models, because default fields doesn't working correctly
+with range filtering in Q objects.
+

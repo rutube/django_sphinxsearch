@@ -65,7 +65,7 @@ class ForcedPKModel(FieldMixin, spx_models.SphinxModel):
     class Meta:
         db_table = 'testapp_testmodel'
 
-    id = models.IntegerField(primary_key=True)
+    id = models.BigIntegerField(primary_key=True)
 
 
 class CharPKModel(FieldMixin, spx_models.SphinxModel):

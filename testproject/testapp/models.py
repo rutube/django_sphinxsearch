@@ -9,7 +9,6 @@ from jsonfield.fields import JSONField
 
 from sphinxsearch import sql
 from sphinxsearch import models as spx_models
-from sphinxsearch import fields as spx_fields
 
 
 class FieldMixin(spx_models.SphinxModel):
@@ -17,7 +16,7 @@ class FieldMixin(spx_models.SphinxModel):
         abstract = True
     sphinx_field = spx_models.SphinxField(default='')
     other_field = spx_models.SphinxField(default='')
-    attr_uint = spx_fields.SphinxIntegerField(default=0, db_column='attr_uint_')
+    attr_uint = spx_models.SphinxIntegerField(default=0, db_column='attr_uint_')
     attr_bigint = spx_models.SphinxBigIntegerField(default=0)
     attr_float = models.FloatField(default=0.0)
     attr_timestamp = spx_models.SphinxDateTimeField(default=datetime.now)

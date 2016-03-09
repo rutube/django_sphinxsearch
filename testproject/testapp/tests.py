@@ -378,7 +378,7 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
     def testWorkWithRangeInQ(self):
         self.create_multiple_models()
         total = len(self.model.objects.all()[:1000])
-
+        self.assertGreater(total, 4)
         # simple Q
         result = self.model.objects.filter(Q(attr_uint__in=[2, 4, 0]))
         self.assertEqual(3, len(result))

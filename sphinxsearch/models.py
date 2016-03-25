@@ -109,8 +109,29 @@ class SphinxQuerySet(QuerySet):
         """
         group_limit = kwargs.get('group_limit', 0)
         group_order_by = kwargs.get('group_order_by', ())
+
         if not isinstance(group_order_by, (list, tuple)):
             group_order_by = [group_order_by]
+
+        def fix_arg_name(group_arg):
+            if group_arg.startswith('-'):
+                negate = True
+                group_arg = group_arg[1:]
+                # if group_arg isn't name of db_column, lets fix it
+                try:
+                    fld = self.model._meta.get_field(group_arg)
+                    group_arg = fld.column
+                except:
+                    pass
+            else:
+                negate = False
+
+            if negate:
+                group_arg = '-%s' % group_arg
+            return group_arg
+
+        group_order_by = list(map(fix_arg_name, group_order_by))
+
         qs = self._clone()
         qs.query.group_by = qs.query.group_by or []
         for field_name in args:

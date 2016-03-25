@@ -482,13 +482,6 @@ class TestOverridenSphinxModel(SphinxModelTestCase):
 class TestModelWithAllDbColumnFields(SphinxModelTestCase):
     model = models.ModelWithAllDbColumnFields
 
-    @expectedFailure
-    def testGroupBy(self):
-        """ group_by пока что воспринимает толко column_name, а field_name
-        ему прокинуть нельзя
-        """
-        super(TestModelWithAllDbColumnFields, self).testGroupBy()
-
 
 class CharPKTestCase(SphinxModelTestCase):
     model = models.CharPKModel
@@ -501,7 +494,7 @@ class CharPKTestCase(SphinxModelTestCase):
     @expectedFailure
     def testDelete(self):
         """
-        DELETE FROM `testapp_charpkmodel` WHERE (IN(docid, '1'))
+        DELETE FROM `testapp_charpkmodel` WHERE (IN(docid, '1')) does not work
         :return:
         """
         super(CharPKTestCase, self).testDelete()

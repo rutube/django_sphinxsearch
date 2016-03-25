@@ -174,7 +174,7 @@ class SphinxQuerySet(QuerySet):
             raise ValueError("Unsupported lookup for SphinxField")
         if negate:
             value = '-%s' % value
-        self.query.add_match(**{field.column: value})
+        self.query.add_match(**{field.name: value})
         return True
 
     def _fetch_meta(self):

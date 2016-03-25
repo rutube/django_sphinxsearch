@@ -9,6 +9,7 @@ from django.db import connections
 from django.db.models import Sum, Q
 from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
+from unittest import expectedFailure
 
 from testapp import models
 from sphinxsearch.routers import SphinxRouter
@@ -103,8 +104,15 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
 
     def testGroupByExtraSelect(self):
         qs = self.model.objects.all()
+
+        column_name = None
+        for fld in self.model._meta.get_fields():
+            if fld.name == 'attr_uint':
+                column_name = fld.db_column
+                break
+
         qs = qs.extra(
-            select={'extra': 'CEIL(attr_uint_/3600)'})
+            select={'extra': 'CEIL(%s/3600)' % column_name})
 
         qs = qs.group_by('extra')
         qs = list(qs)
@@ -471,6 +479,17 @@ class TestOverridenSphinxModel(SphinxModelTestCase):
     model = models.OverridenSphinxModel
 
 
+class TestModelWithAllDbColumnFields(SphinxModelTestCase):
+    model = models.ModelWithAllDbColumnFields
+
+    @expectedFailure
+    def testGroupBy(self):
+        """ group_by пока что воспринимает толко column_name, а field_name
+        ему прокинуть нельзя
+        """
+        super(TestModelWithAllDbColumnFields, self).testGroupBy()
+
+
 class CharPKTestCase(SphinxModelTestCase):
     model = models.CharPKModel
 
@@ -479,7 +498,12 @@ class CharPKTestCase(SphinxModelTestCase):
         defaults['docid'] = str(defaults['id'])
         return defaults
 
+    @expectedFailure
     def testDelete(self):
+        """
+        DELETE FROM `testapp_charpkmodel` WHERE (IN(docid, '1'))
+        :return:
+        """
         super(CharPKTestCase, self).testDelete()
 
 

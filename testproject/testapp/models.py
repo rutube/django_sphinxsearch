@@ -67,6 +67,28 @@ class ForcedPKModel(FieldMixin, spx_models.SphinxModel):
     id = models.BigIntegerField(primary_key=True)
 
 
+class ModelWithAllDbColumnFields(spx_models.SphinxModel):
+    class Meta:
+        db_table = 'testapp_testmodel_aliased'
+
+    sphinx_field = spx_models.SphinxField(default='', db_column='_sphinx_field')
+    other_field = spx_models.SphinxField(default='', db_column='_other_field')
+    attr_uint = spx_models.SphinxIntegerField(default=0, db_column='_attr_uint_')
+    attr_bigint = spx_models.SphinxBigIntegerField(default=0, db_column='_attr_bigint')
+    attr_float = models.FloatField(default=0.0, db_column='_attr_float')
+    attr_timestamp = spx_models.SphinxDateTimeField(default=datetime.now,
+                                                    db_column='_attr_timestamp')
+    attr_string = models.CharField(max_length=32, default='',
+                                   db_column='_attr_string')
+
+    attr_multi = spx_models.SphinxMultiField(default=[],
+                                             db_column='_attr_multi')
+    attr_multi_64 = spx_models.SphinxMulti64Field(default=[],
+                                                  db_column='_attr_multi_64')
+    attr_json = JSONField(default={}, db_column='_attr_json')
+    attr_bool = models.BooleanField(default=False, db_column='_attr_bool')
+
+
 class CharPKModel(FieldMixin, spx_models.SphinxModel):
 
     docid = spx_models.SphinxField(primary_key=True)

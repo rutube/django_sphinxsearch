@@ -15,6 +15,7 @@ class SphinxField(models.TextField):
 
     In sphinxsearch config terms, sql_field_string or rt_field.
     """
+    class_lookups = sphinx_lookups.copy()
 
 
 class SphinxDateTimeField(models.FloatField):

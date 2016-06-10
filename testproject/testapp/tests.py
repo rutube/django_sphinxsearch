@@ -338,6 +338,13 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.assertEqual([q.id for q in qs], expected)
         list(self.model.objects.order_by())
 
+    def testOrderByRand(self):
+        expected = self.create_multiple_models()
+        qs = list(self.model.objects.order_by('?'))
+        qs2 = list(self.model.objects.order_by('?'))
+        self.assertNotEqual(qs, qs2)
+        list(self.model.objects.order_by())
+
     def testGroupBy(self):
         m1 = self.model.objects.create(id=self.newid(),
                                        attr_uint=10, attr_float=1)

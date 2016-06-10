@@ -4,6 +4,7 @@ import re
 
 from django.core.exceptions import FieldError
 from django.db import models
+from django.db.models.expressions import Random
 from django.db.models.lookups import Search, Exact
 from django.db.models.sql import compiler, AND
 from django.db.models.sql.constants import ORDER_DIR
@@ -41,6 +42,17 @@ class SphinxQLCompiler(compiler.SQLCompiler):
             return [r for r in res if r[0] in field_columns]
 
         return res
+
+    def get_order_by(self):
+        res = super(SphinxQLCompiler, self).get_order_by()
+
+        # override ORDER BY for sphinxsearch's "RAND()" support
+        order_by = []
+        for expr, params in res:
+            if isinstance(expr.expression, Random):
+                params = ('RAND()',) + params[1:]
+            order_by.append((expr, params))
+        return order_by
 
     @staticmethod
     def _quote(s, negative=True):

@@ -1,9 +1,9 @@
 # coding: utf-8
 from collections import OrderedDict
 import re
-
 from django.core.exceptions import FieldError
 from django.db import models
+from django.db.models.expressions import Random
 from django.db.models.lookups import Search, Exact
 from django.db.models.sql import compiler, AND
 from django.db.models.sql.constants import ORDER_DIR
@@ -29,6 +29,18 @@ class SphinxQLCompiler(compiler.SQLCompiler):
             params = []
 
         return sql, params
+
+    def get_order_by(self):
+        res = super(SphinxQLCompiler, self).get_order_by()
+
+        order_by = []
+        for expr, params in res:
+            if isinstance(expr.expression, Random):
+                # Replacing ORDER BY RAND() ASC to ORDER BY RAND()
+                assert params[0] == 'RAND() ASC', "Expected ordering clause"
+                params = ('RAND()',) + params[1:]
+            order_by.append((expr, params))
+        return order_by
 
     def get_group_by(self, select, order_by):
         res = super(SphinxQLCompiler, self).get_group_by(select, order_by)

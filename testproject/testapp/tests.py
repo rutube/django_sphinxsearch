@@ -338,6 +338,19 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.assertEqual([q.id for q in qs], expected)
         list(self.model.objects.order_by())
 
+    def testOrderByRand(self):
+        expected = self.create_multiple_models()
+        query = str(self.model.objects.order_by('?').query)
+        self.assertTrue(query.endswith("ORDER BY RAND()"),
+                        msg="invalid query: %s" % query)
+        result = list(self.model.objects.order_by())
+        self.assertEqual(len(expected), len(result))
+
+        query = str(self.model.objects.order_by('?')[:2].query)
+        self.assertTrue(query.endswith("ORDER BY RAND() LIMIT 2"),
+                        msg="invalid query: %s" % query)
+        list(self.model.objects.order_by())
+
     def testGroupBy(self):
         m1 = self.model.objects.create(id=self.newid(),
                                        attr_uint=10, attr_float=1)

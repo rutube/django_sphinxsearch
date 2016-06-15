@@ -3,6 +3,7 @@
 # $Id: $
 import sys
 from datetime import datetime, timedelta
+import random
 
 from django.conf import settings
 from django.db import connections
@@ -220,6 +221,17 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.assertEqual(self.model.objects.count(), 1)
         self.obj.delete()
         self.assertEqual(self.model.objects.count(), 0)
+
+    def testDeleteWithIn(self):
+        expected = self.create_multiple_models()
+        random.shuffle(expected)
+        delete_ids = expected[:random.randint(1, len(expected) - 1)]
+        count_rows = self.model.objects.all().count()
+        qs = self.model.objects.filter(id__in=delete_ids).delete()
+        after_count = self.model.objects.all().count()
+        self.assertEqual(count_rows - len(delete_ids), after_count)
+        list(self.model.objects.order_by())
+
 
     def testDjangoSearch(self):
         other = self.model.objects.filter(sphinx_field__search="hello")[0]

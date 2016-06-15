@@ -221,7 +221,15 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SphinxQLCompiler):
 
 
 class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SphinxQLCompiler):
-    pass
+    def as_sql(self):
+        sql, params = super(SQLDeleteCompiler, self).as_sql()
+
+        # empty SQL doesn't need patching
+        if (sql, params) == ('', ()):
+            return sql, params
+
+        sql = re.sub(r'\(IN\((\w+),\s([\w\s\%,]+)\)\)', '\\1 IN (\\2)', sql)
+        return sql, params
 
 
 class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SphinxQLCompiler):

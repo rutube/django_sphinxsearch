@@ -1,7 +1,6 @@
 # coding: utf-8
 from collections import OrderedDict
 import re
-
 from django.core.exceptions import FieldError
 from django.db import models
 from django.db.models.expressions import Random
@@ -31,6 +30,18 @@ class SphinxQLCompiler(compiler.SQLCompiler):
 
         return sql, params
 
+    def get_order_by(self):
+        res = super(SphinxQLCompiler, self).get_order_by()
+
+        order_by = []
+        for expr, params in res:
+            if isinstance(expr.expression, Random):
+                # Replacing ORDER BY RAND() ASC to ORDER BY RAND()
+                assert params[0] == 'RAND() ASC', "Expected ordering clause"
+                params = ('RAND()',) + params[1:]
+            order_by.append((expr, params))
+        return order_by
+
     def get_group_by(self, select, order_by):
         res = super(SphinxQLCompiler, self).get_group_by(select, order_by)
 
@@ -42,17 +53,6 @@ class SphinxQLCompiler(compiler.SQLCompiler):
             return [r for r in res if r[0] in field_columns]
 
         return res
-
-    def get_order_by(self):
-        res = super(SphinxQLCompiler, self).get_order_by()
-
-        # override ORDER BY for sphinxsearch's "RAND()" support
-        order_by = []
-        for expr, params in res:
-            if isinstance(expr.expression, Random):
-                params = ('RAND()',) + params[1:]
-            order_by.append((expr, params))
-        return order_by
 
     @staticmethod
     def _quote(s, negative=True):

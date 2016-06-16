@@ -221,6 +221,16 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.obj.delete()
         self.assertEqual(self.model.objects.count(), 0)
 
+    def testDeleteWithIn(self):
+        expected = self.create_multiple_models()
+        delete_ids = expected[3:7]
+        self.model.objects.filter(id__in=delete_ids).delete()
+        qs = self.model.objects.filter(id__in=delete_ids)
+        self.assertEqual(len(qs), 0)
+        qs = self.model.objects.all().values_list('id', flat=True)
+        self.assertListEqual(list(qs), expected[:3] + expected[7:])
+
+
     def testDjangoSearch(self):
         other = self.model.objects.filter(sphinx_field__search="hello")[0]
         self.assertEqual(other.id, self.obj.id)

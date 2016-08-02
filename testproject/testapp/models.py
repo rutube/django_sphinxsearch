@@ -1,6 +1,8 @@
 # coding: utf-8
 
 # $Id: $
+import json
+
 import six
 from datetime import datetime
 from django.db import models
@@ -9,6 +11,15 @@ from jsonfield.fields import JSONField
 
 from sphinxsearch import sql
 from sphinxsearch import models as spx_models
+
+
+class Django10CompatJSONField(JSONField):
+
+    def from_db_value(self, value, expression, connection, context):
+        # In Django-1.10 python value is loaded in this method
+        if value is None:
+            return None
+        return json.loads(value)
 
 
 class FieldMixin(spx_models.SphinxModel):
@@ -23,7 +34,7 @@ class FieldMixin(spx_models.SphinxModel):
     attr_string = models.CharField(max_length=32, default='')
     attr_multi = spx_models.SphinxMultiField(default=[])
     attr_multi_64 = spx_models.SphinxMulti64Field(default=[])
-    attr_json = JSONField(default={})
+    attr_json = Django10CompatJSONField(default={})
     attr_bool = models.BooleanField(default=False)
 
 
@@ -55,7 +66,7 @@ class OverridenSphinxModel(six.with_metaclass(sql.SphinxModelBase, models.Model)
     attr_string = models.CharField(max_length=32, default='')
     attr_multi = spx_models.SphinxMultiField(default=[])
     attr_multi_64 = spx_models.SphinxMulti64Field(default=[])
-    attr_json = JSONField(default={})
+    attr_json = Django10CompatJSONField(default={})
     attr_bool = models.BooleanField(default=False)
 
 
@@ -85,7 +96,7 @@ class ModelWithAllDbColumnFields(spx_models.SphinxModel):
                                              db_column='_attr_multi')
     attr_multi_64 = spx_models.SphinxMulti64Field(default=[],
                                                   db_column='_attr_multi_64')
-    attr_json = JSONField(default={}, db_column='_attr_json')
+    attr_json = Django10CompatJSONField(default={}, db_column='_attr_json')
     attr_bool = models.BooleanField(default=False, db_column='_attr_bool')
 
 

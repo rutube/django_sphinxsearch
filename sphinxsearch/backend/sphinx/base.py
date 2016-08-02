@@ -1,6 +1,8 @@
 # coding: utf-8
 
 from django.db.backends.mysql import base, creation
+from django.db.backends.mysql.base import server_version_re
+from django.utils.functional import cached_property
 
 
 class SphinxOperations(base.DatabaseOperations):
@@ -33,21 +35,38 @@ class SphinxCreation(creation.DatabaseCreation):
         return
 
 
+class SphinxFeatures(base.DatabaseFeatures):
+    # The following can be useful for unit testing, with multiple databases
+    # configured in Django, if one of them does not support transactions,
+    # Django will fall back to using clear/create
+    # (instead of begin...rollback) between each test. The method Django
+    # uses to detect transactions uses CREATE TABLE and DROP TABLE,
+    # which ARE NOT supported by Sphinx, even though transactions ARE.
+    # Therefore, we can just set this to True, and Django will use
+    # transactions for clearing data between tests when all OTHER backends
+    # support it.
+    supports_transactions = True
+    allows_group_by_pk = False
+    uses_savepoints = False
+    supports_column_check_constraints = False
+    is_sql_auto_is_null_enabled = False
+
+
 class DatabaseWrapper(base.DatabaseWrapper):
     def __init__(self, *args, **kwargs):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
         self.ops = SphinxOperations(self)
         self.creation = SphinxCreation(self)
-        # The following can be useful for unit testing, with multiple databases
-        # configured in Django, if one of them does not support transactions,
-        # Django will fall back to using clear/create
-        # (instead of begin...rollback) between each test. The method Django
-        # uses to detect transactions uses CREATE TABLE and DROP TABLE,
-        # which ARE NOT supported by Sphinx, even though transactions ARE.
-        # Therefore, we can just set this to True, and Django will use
-        # transactions for clearing data between tests when all OTHER backends
-        # support it.
-        self.features.supports_transactions = True
-        self.features.allows_group_by_pk = False
-        self.features.uses_savepoints = False
-        self.features.supports_column_check_constraints = False
+        self.features = SphinxFeatures(self)
+
+    @cached_property
+    def mysql_version(self):
+        # Django>=1.10 makes if differently
+        with self.temporary_connection():
+            server_info = self.connection.get_server_info()
+        match = server_version_re.match(server_info)
+        if not match:
+            raise Exception('Unable to determine MySQL version from version '
+                            'string %r' % server_info)
+        return tuple(int(x) for x in match.groups())
+

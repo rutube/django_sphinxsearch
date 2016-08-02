@@ -136,7 +136,7 @@ class SphinxQuerySet(QuerySet):
         qs.query.group_by = qs.query.group_by or []
         for field_name in args:
             if field_name not in qs.query.extra_select:
-                field = self.model._meta.get_field_by_name(field_name)[0]
+                field = self.model._meta.get_field(field_name)
                 qs.query.group_by.append(field.attname)
             else:
                 qs.query.group_by.append(RawSQL(field_name, []))

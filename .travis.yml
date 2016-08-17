@@ -21,10 +21,12 @@ matrix:
 install:
   - pip install Django==$DJANGO
   - pip install -r test-requires.txt
+  - pip install codecov
 
 # command to run tests
 script:
     - searchd -c `pwd`/test_config/sphinx.conf
-    - python ./manage.py test -v3
+    - python -m coverage run ./manage.py test -v3
 
 after-script: kill `cat /tmp/searchd.pid`
+after_success: codecov

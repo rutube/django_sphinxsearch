@@ -69,4 +69,3 @@ class DatabaseWrapper(base.DatabaseWrapper):
             raise Exception('Unable to determine MySQL version from version '
                             'string %r' % server_info)
         return tuple(int(x) for x in match.groups())
-

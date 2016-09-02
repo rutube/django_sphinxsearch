@@ -12,6 +12,6 @@ def sphinx_escape(value):
     if not isinstance(value, six.string_types):
         return value
 
-    value = re.sub(r"([=<>()|!@~&/^$\-\'\"\\])", r'\\\1', value)
-    value = re.sub(r'(SENTENCE|PARAGRAPH)', r'\\\1', value, flags=re.I)
+    value = re.sub(r"([=<>()|!@~&/^$\-\'\"\\])", r'\\\\\\\1', value)
+    value = re.sub(r'\b(SENTENCE|PARAGRAPH)\b', r'\\\\\\\1', value)
     return value

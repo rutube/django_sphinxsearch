@@ -7,10 +7,12 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.db import connections
 from django.db.models import Sum, Q
+from django.db.utils import ProgrammingError
 from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from unittest import expectedFailure
 
+from sphinxsearch.utils import sphinx_escape
 from testapp import models
 from sphinxsearch.routers import SphinxRouter
 
@@ -493,7 +495,6 @@ class SphinxModelTestCase(SphinxModelTestCaseBase):
         self.assertNotIn(999, item.attr_multi)
 
 
-
 class ForcedPKTestCase(SphinxModelTestCase):
     model = models.ForcedPKModel
 
@@ -546,3 +547,62 @@ class TestSphinxRouter(SphinxModelTestCaseBase):
 
         self.assertFalse(self.router.is_sphinx_model(
             models.DefaultDjangoModel()))
+
+
+class EscapingTestCase(SphinxModelTestCaseBase):
+    """ Checks escaping symbols"""
+
+    def setUp(self):
+        super(EscapingTestCase, self).setUp()
+        self.obj.sphinx_field = 'sphinx'
+        self.obj.save()
+
+    def query(self, text, escape=True):
+        escaped = sphinx_escape(text) if escape else text
+        for c in text:
+            self.assertIn(c, escaped)
+        try:
+            return list(self.model.objects.match(escaped))
+        except ProgrammingError as e:
+            self.fail("Escaping text %s with %s failed: %s" %
+                      (text, escaped, e.args[1]))
+
+    def testSphinxCharactersEscaping(self):
+        """
+        Any sphinxql operator should not match document if escaped properly.
+        """
+        operators = '=<>()|!@~&/^$\-\'\"\\'
+        for o in operators:
+            res = self.query("sphinx operators %s" % o)
+            self.assertEqual(len(res), 0)
+            text = sphinx_escape("sphinx operators %s" % o)
+            res = self.query('"%s"/1' % text, escape=False)
+            self.assertEqual(len(res), 1)
+
+    def testSphinxKeywordsEscaping(self):
+        """
+        a SENTENCE b means "a" and "b" in one sentence.
+        a PARAGRAPH b means "a" and "b" in same html block.
+        """
+        self.obj.sphinx_field = ('<H1>Paragraph is not a word.</H1>\n'
+                                 '<P>Sentence also.</P>')
+        self.obj.save()
+        # text contains word paragraph
+        res = self.query("PARAGRAPH")
+        self.assertEqual(len(res), 1)
+        text = sphinx_escape("PARAGRAPH")
+        # "paragraph" and "is" in one sentence
+        res = self.query('%s SENTENCE is' % text, escape=False)
+        self.assertTrue(len(res), 1)
+
+        # text contains word sentence
+        res = self.query("SENTENCE")
+        self.assertEqual(len(res), 1)
+        text = sphinx_escape("SENTENCE")
+        # "sentence" and "also" in one paragraph
+        res = self.query('%s PARAGRAPH also' % text, escape=False)
+        self.assertTrue(len(res), 1)
+
+        # "not" and "sentence" in one paragraph (actually, false)
+        res = self.query('not PARAGRAPH %s' % text, escape=False)
+        self.assertEqual(len(res), 0)

@@ -6,7 +6,7 @@ from django.db import connections
 from django.db.models import QuerySet
 from django.db.models.expressions import RawSQL
 
-from sphinxsearch import sql
+from sphinxsearch import sql, compat
 from sphinxsearch.fields import *
 from sphinxsearch.utils import sphinx_escape
 
@@ -213,6 +213,16 @@ class SphinxQuerySet(QuerySet):
             yield row
         if getattr(self.query, 'with_meta', False):
             self._fetch_meta()
+
+    if compat.DJ_11:
+        # Django-1.11 does not use iterator() call when materializing, so
+        # with_meta() should be handled separately.
+
+        def _fetch_all(self):
+            super(SphinxQuerySet, self)._fetch_all()
+            if getattr(self.query, 'with_meta', False):
+                self._fetch_meta()
+
 
 class SphinxManager(models.Manager):
     use_for_related_fields = True

@@ -17,6 +17,15 @@ class SphinxOperations(base.DatabaseOperations):
         return []
 
 
+class SphinxValidation(base.DatabaseValidation):
+    def _check_sql_mode(self, **kwargs):
+        """ Disable sql_mode validation because it's unsupported
+        >>> cursor.execute("SELECT @@sql_mode")
+        # Error here
+        """
+        return []
+
+
 class SphinxCreation(creation.DatabaseCreation):
 
     def create_test_db(self, *args, **kwargs):
@@ -58,6 +67,7 @@ class DatabaseWrapper(base.DatabaseWrapper):
         self.ops = SphinxOperations(self)
         self.creation = SphinxCreation(self)
         self.features = SphinxFeatures(self)
+        self.validation = SphinxValidation(self)
 
     @cached_property
     def mysql_version(self):

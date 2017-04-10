@@ -16,7 +16,7 @@ except ImportError:
 
 setup(
     name='django_sphinxsearch',
-    version='0.8.0',
+    version='0.8.1',
     long_description=read_md('README.md'),
     packages=[
         'sphinxsearch',

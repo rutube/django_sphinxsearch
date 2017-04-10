@@ -6,6 +6,10 @@ from django.utils.functional import cached_property
 
 
 class SphinxOperations(base.DatabaseOperations):
+
+    def regex_lookup(self, lookup_type):
+        raise NotImplementedError()
+
     compiler_module = "sphinxsearch.backend.sphinx.compiler"
 
     def fulltext_search_sql(self, field_name):
@@ -14,6 +18,17 @@ class SphinxOperations(base.DatabaseOperations):
 
     def force_no_ordering(self):
         """ Fix unsupported syntax "ORDER BY NULL"."""
+        return []
+
+
+class SphinxValidation(base.DatabaseValidation):
+    def _check_sql_mode(self, **kwargs):
+        """ Disable sql_mode validation because it's unsupported
+        >>> import django.db
+        >>> cursor = django.db.connection
+        >>> cursor.execute("SELECT @@sql_mode")
+        # Error here after parsing searchd response
+        """
         return []
 
 
@@ -58,6 +73,10 @@ class DatabaseWrapper(base.DatabaseWrapper):
         self.ops = SphinxOperations(self)
         self.creation = SphinxCreation(self)
         self.features = SphinxFeatures(self)
+        self.validation = SphinxValidation(self)
+
+    def _start_transaction_under_autocommit(self):
+        raise NotImplementedError()
 
     @cached_property
     def mysql_version(self):

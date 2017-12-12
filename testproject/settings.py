@@ -84,7 +84,7 @@ DATABASES = {
     SPHINX_DATABASE_NAME: {
         'ENGINE': 'sphinxsearch.backend.sphinx',
         'HOST': '127.0.0.1',
-        'PORT': 9306,
+        'PORT': 9307,
     }
 }
 

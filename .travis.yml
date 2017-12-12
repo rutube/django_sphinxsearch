@@ -20,6 +20,9 @@ matrix:
 
 # command to install dependencies
 install:
+  - sudo add-apt-repository ppa:builds/sphinxsearch-rel22 -y
+  - sudo apt-get update
+  - sudo apt-get install -y sphinxsearch
   - pip install Django==$DJANGO
   - pip install -r test-requires.txt
   - pip install codecov
